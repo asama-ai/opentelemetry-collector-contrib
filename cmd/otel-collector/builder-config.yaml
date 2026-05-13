@@ -7,9 +7,11 @@ dist:
 
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfishlogreceiver v0.141.0
 
 extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.141.0
 
 processors:
   - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.141.0

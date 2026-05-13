@@ -61,6 +61,9 @@ type Config struct {
 	ClusterName string `mapstructure:"cluster_name"`
 	// CreateSchema if set to true will run the DDL for creating the database and tables. default is true.
 	CreateSchema bool `mapstructure:"create_schema"`
+	// LogsDedupKeyAttribute names a log record attribute whose value is stored in column DedupKey for ReplacingMergeTree deduplication.
+	// When set with create_schema, the exporter creates the logs table with DedupKey and ReplacingMergeTree(Timestamp) unless table_engine is explicitly set to another Replacing variant.
+	LogsDedupKeyAttribute string `mapstructure:"logs_dedup_key_attribute"`
 	// Compress controls the compression algorithm. Valid options: `none` (disabled), `zstd`, `lz4` (default), `gzip`, `deflate`, `br`, `true` (lz4).
 	Compress string `mapstructure:"compress"`
 	// AsyncInsert if true will enable async inserts. Default is `true`.

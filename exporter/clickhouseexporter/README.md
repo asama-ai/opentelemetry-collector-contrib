@@ -327,6 +327,10 @@ Table engine:
 Modifies `ENGINE` definition when table is created. If not set then `ENGINE` defaults to `MergeTree()`.
 Can be combined with `cluster_name` to enable [replication for fault tolerance](https://clickhouse.com/docs/en/architecture/replication).
 
+When `logs_dedup_key_attribute` is set and `create_schema` is `true`, the exporter creates the logs table with a leading `DedupKey` column and `ReplacingMergeTree(Timestamp)` (unless `table_engine.name` is set to a non-default engine, in which case that engine string is used). Inserts read the named attribute from each log record (for example `redfish.entry_fingerprint` from the redfishlog receiver) into `DedupKey` so replays collapse to one row per key after merges.
+
+- `logs_dedup_key_attribute` (default = empty): When non-empty, requires a `DedupKey` column on the logs table (created automatically when `create_schema` is true).
+
 Processing:
 
 - `timeout` (default = 5s): The timeout for every attempt to send data to the backend.

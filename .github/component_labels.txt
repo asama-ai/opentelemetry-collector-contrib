@@ -305,6 +305,7 @@ receiver/purefbreceiver receiver/purefb
 receiver/rabbitmqreceiver receiver/rabbitmq
 receiver/receivercreator receiver/receivercreator
 receiver/redfishreceiver receiver/redfish
+receiver/redfishlogreceiver receiver/redfishlog
 receiver/redisreceiver receiver/redis
 receiver/riakreceiver receiver/riak
 receiver/saphanareceiver receiver/saphana
