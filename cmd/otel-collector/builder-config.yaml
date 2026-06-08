@@ -7,6 +7,7 @@ dist:
 
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfisheventreceiver v0.141.0
 
 extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.141.0
@@ -16,3 +17,7 @@ processors:
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.141.0
+
+# Local fork modules: not published on go.opentelemetry.io / upstream contrib at this path+version.
+replaces:
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfisheventreceiver => ../../receiver/redfisheventreceiver
