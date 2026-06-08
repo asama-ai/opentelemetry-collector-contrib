@@ -16,6 +16,8 @@ type EventRule struct {
 	AsamaMessageKey string `json:"asama_message_key"`
 	FaultType       string `json:"fault_type"`
 	CreateFault     bool   `json:"create_fault"`
+	SensorType      string `json:"sensor_type"`
+	EventType       string `json:"event_type"`
 }
 
 // Catalog loads fault-eligible-events.json and lifecycle rules.
@@ -23,6 +25,7 @@ type Catalog struct {
 	openLifecycles  map[string]struct{}
 	closeLifecycles map[string]struct{}
 	events          map[string]EventRule
+	ingest          IngestConfig
 }
 
 type faultCatalogFile struct {
@@ -30,6 +33,7 @@ type faultCatalogFile struct {
 		OpenOnLifecycle  []string `json:"open_on_lifecycle"`
 		CloseOnLifecycle []string `json:"close_on_lifecycle"`
 	} `json:"fault_rules"`
+	Ingest     IngestConfig `json:"ingest"`
 	Categories map[string]struct {
 		Events []EventRule `json:"events"`
 	} `json:"categories"`
@@ -49,6 +53,7 @@ func Load(path string) (*Catalog, error) {
 		openLifecycles:  make(map[string]struct{}),
 		closeLifecycles: make(map[string]struct{}),
 		events:          make(map[string]EventRule),
+		ingest:          raw.Ingest,
 	}
 	for _, lc := range raw.FaultRules.OpenOnLifecycle {
 		c.openLifecycles[lc] = struct{}{}

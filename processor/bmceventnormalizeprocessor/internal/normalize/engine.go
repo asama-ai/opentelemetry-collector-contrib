@@ -25,6 +25,7 @@ type Result struct {
 	MessageSeverity string
 	Lifecycle string
 	Domain string
+	Component string
 	SubscriptionPriority string
 	VendorName string
 	VendorMessageID string
@@ -72,11 +73,12 @@ type asamaMessage struct {
 	Severity        string `json:"Severity"`
 	MessageSeverity string `json:"MessageSeverity"`
 	NumberOfArgs    int    `json:"NumberOfArgs"`
-	Oem             struct {
+		Oem             struct {
 		Asama struct {
 			AsamaID              string `json:"AsamaId"`
 			DefaultLifecycle     string `json:"DefaultLifecycle"`
 			Domain               string `json:"Domain"`
+			Component            string `json:"Component"`
 			SubscriptionPriority string `json:"SubscriptionPriority"`
 			Serviceable          bool   `json:"Serviceable"`
 			CallHome             bool   `json:"CallHome"`
@@ -282,6 +284,7 @@ func (e *Engine) Normalize(vendor, messageID, vendorMessage, severity, bmcIP, bm
 		MessageSeverity:      msgSev,
 		Lifecycle:            lifecycle,
 		Domain:               oem.Domain,
+		Component:            oem.Component,
 		SubscriptionPriority: oem.SubscriptionPriority,
 		VendorName:           sourceMeta.VendorName,
 		VendorMessageID:      messageID,

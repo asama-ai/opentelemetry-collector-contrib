@@ -6,8 +6,6 @@ package bmcfaultsignalprocessor // import "github.com/open-telemetry/opentelemet
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,24 +26,11 @@ import (
 
 var processorCapabilities = consumer.Capabilities{MutatesData: false}
 
-type ingestPayload struct {
-	Action       string `json:"action"`
-	Hostname     string `json:"hostname"`
-	SensorType   string `json:"sensor_type"`
-	SensorNumber string `json:"sensor_number"`
-	EventType    string `json:"event_type"`
-	Description  string `json:"description"`
-	FaultType    string `json:"fault_type,omitempty"`
-	SensorName   string `json:"sensor_name,omitempty"`
-	EventID      string `json:"event_id,omitempty"`
-	Timestamp    string `json:"timestamp,omitempty"`
-}
-
 type faultSignalProcessor struct {
-	cfg      *Config
-	catalog  *catalog.Catalog
-	client   *http.Client
-	logger   *zap.Logger
+	cfg     *Config
+	catalog *catalog.Catalog
+	client  *http.Client
+	logger  *zap.Logger
 }
 
 func newFaultSignalProcessor(cfg *Config, logger *zap.Logger) (*faultSignalProcessor, error) {
@@ -70,7 +55,6 @@ func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (p
 	for i := 0; i < ld.ResourceLogs().Len(); i++ {
 		rl := ld.ResourceLogs().At(i)
 		resAttrs := rl.Resource().Attributes()
-		bmcIP := firstNonEmpty(attrStr(resAttrs, "bmc.ip"), attrStr(resAttrs, "bmc.hostname"))
 		tenant := p.cfg.Tenant
 		if tenant == "" && p.cfg.TenantAttribute != "" {
 			tenant = attrStr(resAttrs, p.cfg.TenantAttribute)
@@ -90,24 +74,9 @@ func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (p
 				if !ok {
 					continue
 				}
-				component := attrStr(attrs, "asama.component")
-				faultKey := computeFaultKey(bmcIP, asamaID, component)
-				hostname := firstNonEmpty(bmcIP, attrStr(resAttrs, "bmc.hostname"))
 
-				payload := ingestPayload{
-					Action:       action,
-					Hostname:     hostname,
-					SensorType:   "bmc",
-					SensorNumber: faultKey,
-					EventType:    asamaID,
-					Description:  attrStr(attrs, "asama.message"),
-					FaultType:    rule.FaultType,
-					SensorName:   component,
-					Timestamp:    attrStr(attrs, "redfish.event_timestamp"),
-				}
-				if msgID := attrStr(attrs, "redfish.message_id"); msgID != "" {
-					payload.EventID = "bmc-" + msgID
-				}
+				payload := p.catalog.BuildIngestPayload(resAttrs, attrs, rule)
+				payload["action"] = action
 
 				if err := p.postIngest(ctx, tenant, payload); err != nil {
 					p.logger.Error("bmc fault ingest failed", zap.Error(err), zap.String("asama_id", asamaID), zap.String("action", action))
@@ -121,7 +90,7 @@ func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (p
 	return ld, firstErr
 }
 
-func (p *faultSignalProcessor) postIngest(ctx context.Context, tenant string, payload ingestPayload) error {
+func (p *faultSignalProcessor) postIngest(ctx context.Context, tenant string, payload map[string]string) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -146,26 +115,12 @@ func (p *faultSignalProcessor) postIngest(ctx context.Context, tenant string, pa
 	return nil
 }
 
-func computeFaultKey(bmcIP, asamaID, component string) string {
-	sum := sha256.Sum256([]byte(bmcIP + "|" + asamaID + "|" + component))
-	return hex.EncodeToString(sum[:])
-}
-
 func attrStr(m pcommon.Map, key string) string {
 	v, ok := m.Get(key)
 	if !ok {
 		return ""
 	}
 	return v.Str()
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func NewFactory() processor.Factory {

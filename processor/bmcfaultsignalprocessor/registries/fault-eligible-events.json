@@ -13,6 +13,41 @@
       "unknown"
     ]
   },
+  "ingest": {
+    "payload": {
+      "hostname": [
+        "host.name",
+        "bmc.hostname",
+        "bmc.ip"
+      ],
+      "sensor_name": [
+        "asama.component"
+      ],
+      "sensor_number": [
+        "asama.component"
+      ],
+      "description": [
+        "asama.message",
+        "asama.description"
+      ],
+      "event_data": [
+        "asama.message",
+        "asama.description"
+      ],
+      "timestamp": [
+        "redfish.event_timestamp"
+      ]
+    },
+    "from_rule": {
+      "sensor_type": "sensor_type",
+      "event_type": "event_type",
+      "fault_type": "fault_type"
+    },
+    "event_id": {
+      "prefix": "bmc-",
+      "from": "redfish.message_id"
+    }
+  },
   "categories": {
     "power": {
       "description": "PSU, redundancy, input power",
@@ -35,7 +70,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Power Supply",
+          "event_type": "Power Failure"
         },
         {
           "asama_id": "power.redundancy.lost",
@@ -57,7 +94,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Power Supply",
+          "event_type": "Power Redundancy Loss"
         },
         {
           "asama_id": "power.input.lost",
@@ -77,9 +116,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Power Supply",
+          "event_type": "Power Failure"
         }
-      ]
+      ],
+      "sensor_type": "Power Supply"
     },
     "thermal": {
       "description": "Temperature thresholds and thermal shutdown",
@@ -105,7 +147,9 @@
               ]
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Thermal",
+          "event_type": "Thermal Threshold Critical"
         },
         {
           "asama_id": "thermal.threshold.warning",
@@ -127,7 +171,9 @@
               ]
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Thermal",
+          "event_type": "Thermal Threshold Warning"
         },
         {
           "asama_id": "thermal.shutdown",
@@ -147,9 +193,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Thermal",
+          "event_type": "Thermal Shutdown"
         }
-      ]
+      ],
+      "sensor_type": "Thermal"
     },
     "fan": {
       "description": "Cooling fan failures and redundancy",
@@ -174,7 +223,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Fan",
+          "event_type": "Fan Failure"
         },
         {
           "asama_id": "fan.redundancy.lost",
@@ -196,9 +247,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Fan",
+          "event_type": "Fan Redundancy Loss"
         }
-      ]
+      ],
+      "sensor_type": "Fan"
     },
     "processor": {
       "description": "CPU failures and thermal trips",
@@ -223,7 +277,9 @@
               ]
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Processor",
+          "event_type": "Processor Thermal Trip"
         },
         {
           "asama_id": "processor.failure",
@@ -243,9 +299,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Processor",
+          "event_type": "Processor Failure"
         }
-      ]
+      ],
+      "sensor_type": "Processor"
     },
     "memory": {
       "description": "DIMM and memory errors",
@@ -268,7 +327,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Memory",
+          "event_type": "Memory ECC Error"
         },
         {
           "asama_id": "memory.correctable_error",
@@ -288,7 +349,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Memory",
+          "event_type": "Memory ECC Error"
         },
         {
           "asama_id": "memory.dimm.failure",
@@ -308,9 +371,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Memory",
+          "event_type": "Memory Configuration Error"
         }
-      ]
+      ],
+      "sensor_type": "Memory"
     },
     "storage": {
       "description": "Drive, array, and controller faults",
@@ -336,7 +402,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Storage",
+          "event_type": "Storage Drive Failure"
         },
         {
           "asama_id": "storage.drive.predictive_failure",
@@ -359,7 +427,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Storage",
+          "event_type": "Storage Drive Failure"
         },
         {
           "asama_id": "storage.array.degraded",
@@ -382,7 +452,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Storage",
+          "event_type": "Storage Array Degraded"
         },
         {
           "asama_id": "storage.controller.failure",
@@ -404,9 +476,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Storage",
+          "event_type": "Storage Controller Failure"
         }
-      ]
+      ],
+      "sensor_type": "Storage"
     },
     "network": {
       "description": "NIC and link reachability",
@@ -431,9 +506,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Network",
+          "event_type": "Network Link Down"
         }
-      ]
+      ],
+      "sensor_type": "Network"
     },
     "firmware": {
       "description": "Firmware update failures",
@@ -456,9 +534,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Firmware",
+          "event_type": "Firmware Update Failed"
         }
-      ]
+      ],
+      "sensor_type": "Firmware"
     },
     "platform_health": {
       "description": "BMC and resource health",
@@ -483,7 +564,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "Management",
+          "event_type": "BMC Health Degraded"
         },
         {
           "asama_id": "resource.status.critical",
@@ -505,7 +588,9 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "System Health",
+          "event_type": "System Status Degraded"
         },
         {
           "asama_id": "resource.status.warning",
@@ -525,9 +610,12 @@
               "lenovo": []
             },
             "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
-          }
+          },
+          "sensor_type": "System Health",
+          "event_type": "System Status Degraded"
         }
-      ]
+      ],
+      "sensor_type": "Platform Health"
     }
   },
   "excluded_from_faults": {

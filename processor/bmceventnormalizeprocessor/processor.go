@@ -225,6 +225,7 @@ func appendParsedEvent(out plog.Logs, inRL plog.ResourceLogs, inSL plog.ScopeLog
 	attrs.PutStr("asama.message_severity", result.MessageSeverity)
 	attrs.PutStr("asama.lifecycle", result.Lifecycle)
 	attrs.PutStr("asama.domain", result.Domain)
+	attrs.PutStr("asama.component_type", result.Component)
 	attrs.PutStr("asama.subscription_priority", result.SubscriptionPriority)
 	attrs.PutStr("asama.bundle_id", result.BundleID)
 	if result.ComponentArgIndex > 0 {
