@@ -208,6 +208,8 @@ pkg/translator/loki
 pkg/translator/opencensus
 pkg/translator/pprof
 processor/attributesprocessor
+processor/bmceventnormalizeprocessor
+processor/bmcfaultsignalprocessor
 processor/coralogixprocessor
 processor/cumulativetodeltaprocessor
 processor/datadogsemanticsprocessor
@@ -304,6 +306,7 @@ receiver/purefareceiver
 receiver/purefbreceiver
 receiver/rabbitmqreceiver
 receiver/receivercreator
+receiver/redfisheventreceiver
 receiver/redfishreceiver
 receiver/redisreceiver
 receiver/riakreceiver

@@ -188,6 +188,8 @@ module-sets:
       - github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters
       - github.com/open-telemetry/opentelemetry-collector-contrib/pkg/xk8stest
       - github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor
+      - github.com/open-telemetry/opentelemetry-collector-contrib/processor/bmceventnormalizeprocessor
+      - github.com/open-telemetry/opentelemetry-collector-contrib/processor/bmcfaultsignalprocessor
       - github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor
       - github.com/open-telemetry/opentelemetry-collector-contrib/processor/coralogixprocessor
       - github.com/open-telemetry/opentelemetry-collector-contrib/processor/datadogsemanticsprocessor
@@ -299,6 +301,7 @@ module-sets:
       - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver
       - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator
       - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfishreceiver
+      - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfisheventreceiver
       - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver
       - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/riakreceiver
       - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver
