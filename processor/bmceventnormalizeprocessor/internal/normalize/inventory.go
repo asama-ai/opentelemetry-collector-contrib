@@ -21,6 +21,8 @@ type Identity struct {
 	BMCModel        string
 	FirmwareVersion string
 	BundleID        string
+	Hostname        string
+	SerialNumber    string
 	Source          string
 }
 
@@ -76,11 +78,11 @@ func NewInventoryResolver(cfg InventoryConfig) *InventoryResolver {
 	}
 	cacheTTL := cfg.PrometheusCacheTTL
 	if cacheTTL == 0 {
-		cacheTTL = 5 * time.Minute
+		cacheTTL = time.Hour
 	}
 	query := cfg.PrometheusQuery
 	if query == "" && cfg.PrometheusEndpoint != "" {
-		query = `last_over_time(redfish_bmc_manager_info{target=~"$IP(:[0-9]+)?"}[24h])`
+		query = `last_over_time(redfish_bmc_manager_info{instance="$IP"}[24h])`
 	}
 	return &InventoryResolver{
 		promEndpoint:    strings.TrimRight(cfg.PrometheusEndpoint, "/"),
@@ -109,7 +111,25 @@ func (r *InventoryResolver) Resolve(bmcIP, messageID, vendor, bmcModel, firmware
 	bmcIP = normalizeIP(bmcIP)
 	if bmcIP != "" {
 		if id, ok := r.lookupPrometheus(bmcIP); ok {
-			return mergeIdentity(vendor, bmcModel, firmware, id)
+			id = mergeIdentity(vendor, bmcModel, firmware, id)
+			if id.BundleID == "" && r.indexIPLookup {
+				if idx, ok := r.engine.lookupByIndexIP(bmcIP); ok {
+					if id.Vendor == "" {
+						id.Vendor = idx.Vendor
+					}
+					if id.BMCModel == "" {
+						id.BMCModel = idx.BMCModel
+					}
+					if id.FirmwareVersion == "" {
+						id.FirmwareVersion = idx.FirmwareVersion
+					}
+					id.BundleID = idx.BundleID
+					if id.Source == "" {
+						id.Source = identitySourceIndexIP
+					}
+				}
+			}
+			return id
 		}
 		if r.indexIPLookup {
 			if id, ok := r.engine.lookupByIndexIP(bmcIP); ok {
@@ -195,13 +215,18 @@ func (r *InventoryResolver) lookupPrometheus(bmcIP string) (Identity, bool) {
 	}
 
 	labels := parsed.Data.Result[0].Metric
-	id, ok := r.engine.matchBundleFromLabels(
+	id, matched := r.engine.matchBundleFromLabels(
 		labels["manufacturer"],
 		labels["model"],
 		labels["firmware_version"],
 	)
-	if !ok {
-		return Identity{}, false
+	id.Hostname = strings.TrimSpace(labels["hostname"])
+	id.SerialNumber = strings.TrimSpace(labels["serial_number"])
+	if !matched {
+		id.Vendor = normalizeVendor(labels["manufacturer"])
+		if id.Vendor == "" && id.Hostname == "" && id.SerialNumber == "" {
+			return Identity{}, false
+		}
 	}
 	id.Source = identitySourcePrometheus
 

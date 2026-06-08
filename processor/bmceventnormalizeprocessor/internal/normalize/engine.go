@@ -464,7 +464,8 @@ func modelMatchesBundle(b indexBundle, promModel string) bool {
 	}
 	switch bmcModel {
 	case "ilo6":
-		return strings.Contains(promModel, "ilo 6") || strings.Contains(promModel, "ilo6")
+		return strings.Contains(promModel, "ilo 6") || strings.Contains(promModel, "ilo6") ||
+			strings.Contains(promModel, "ilo 5") || strings.Contains(promModel, "ilo5")
 	case "idrac9":
 		return strings.Contains(promModel, "idrac") || strings.Contains(promModel, "14g") || strings.Contains(promModel, "15g")
 	case "xcc":

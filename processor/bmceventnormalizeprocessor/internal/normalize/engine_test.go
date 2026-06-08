@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -131,8 +132,11 @@ func TestInventoryResolvePrometheus(t *testing.T) {
 			"status":"success",
 			"data":{"result":[{"metric":{
 				"manufacturer":"HPE",
-				"model":"iLO 6",
-				"firmware_version":"3.14.0"
+				"model":"iLO 5",
+				"firmware_version":"iLO 5 v3.08",
+				"hostname":"nxtegn-test-02",
+				"serial_number":"SGH810WXP1",
+				"instance":"10.25.40.207"
 			}}]}
 		}`))
 	}))
@@ -140,7 +144,7 @@ func TestInventoryResolvePrometheus(t *testing.T) {
 
 	resolver := NewInventoryResolver(InventoryConfig{
 		PrometheusEndpoint: srv.URL,
-		PrometheusQuery:    `redfish_bmc_manager_info{target="$IP"}`,
+		PrometheusQuery:    `redfish_bmc_manager_info{instance="$IP"}`,
 		IndexIPLookup:      false,
 		MessageIDFallback:  false,
 	})
@@ -148,8 +152,51 @@ func TestInventoryResolvePrometheus(t *testing.T) {
 
 	id := resolver.Resolve("10.25.40.207", "", "", "", "")
 	require.Equal(t, "hpe", id.Vendor)
-	require.Equal(t, "ilo6", id.BMCModel)
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, "SGH810WXP1", id.SerialNumber)
 	require.Equal(t, identitySourcePrometheus, id.Source)
+	// iLO 5 firmware label may not match ilo6/3.14.0 bundle; index_ip still resolves bundle at runtime.
+}
+
+func TestInventoryPrometheusCache(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{
+			"status":"success",
+			"data":{"result":[{"metric":{
+				"manufacturer":"HPE",
+				"hostname":"nxtegn-test-02",
+				"instance":"10.25.40.207"
+			}}]}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		PrometheusEndpoint: srv.URL,
+		PrometheusQuery:    `redfish_bmc_manager_info{instance="$IP"}`,
+		PrometheusCacheTTL: time.Hour,
+		IndexIPLookup:      false,
+		MessageIDFallback:  false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls)
+
+	id = resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Prometheus again")
 }
 
 func TestMatchBundleFromLabels(t *testing.T) {

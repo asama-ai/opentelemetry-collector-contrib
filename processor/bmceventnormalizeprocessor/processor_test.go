@@ -65,6 +65,10 @@ func TestProcessLogsFromRawPayload(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "storage.drive.failure", asamaID.Str())
 	require.NotEmpty(t, parsed.Body().AsString())
+
+	hostName, ok := out.ResourceLogs().At(0).Resource().Attributes().Get("host.name")
+	require.True(t, ok)
+	require.Equal(t, "10.25.40.207", hostName.Str())
 }
 
 func TestProcessLogsSkipsWithoutRawPayload(t *testing.T) {

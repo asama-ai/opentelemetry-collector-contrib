@@ -137,17 +137,6 @@ func appendParsedEvent(out plog.Logs, inRL plog.ResourceLogs, inSL plog.ScopeLog
 		lr.SetTimestamp(inLR.Timestamp())
 	}
 
-	if ev.MessageID == "" {
-		attrs.PutStr("asama.mapping_status", "unmapped")
-		if ev.Message != "" {
-			lr.Body().SetStr(ev.Message)
-		} else if ev.EventType != "" {
-			lr.Body().SetStr(ev.EventType)
-		}
-		return
-	}
-
-	vendorMessage := ev.Message
 	identity := p.inventory.Resolve(bmcIP, ev.MessageID, vendor, bmcModel, firmware)
 	if identity.Vendor != "" {
 		vendor = identity.Vendor
@@ -169,6 +158,24 @@ func appendParsedEvent(out plog.Logs, inRL plog.ResourceLogs, inSL plog.ScopeLog
 		attrs.PutStr("asama.identity_source", identity.Source)
 	}
 
+	normalize.ApplyClickHouseResourceAttrs(
+		func(key string) string { return attrStr(resAttrs, key) },
+		func(key, value string) { putIfNonEmpty(resAttrs, key, value) },
+		ev,
+		identity,
+	)
+
+	if ev.MessageID == "" {
+		attrs.PutStr("asama.mapping_status", "unmapped")
+		if ev.Message != "" {
+			lr.Body().SetStr(ev.Message)
+		} else if ev.EventType != "" {
+			lr.Body().SetStr(ev.EventType)
+		}
+		return
+	}
+
+	vendorMessage := ev.Message
 	if vendorMessage == "" || vendorMessage == ev.MessageID {
 		if bundle, err := p.engine.LookupBundle(vendor, bmcModel, firmware, bundleID); err == nil {
 			if resolved := p.vendorRegistry.ResolveMessage(bundle, ev.MessageID, ev.MessageArgs); resolved != "" {

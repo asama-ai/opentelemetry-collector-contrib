@@ -15,6 +15,7 @@ const (
 	defaultMappingsIndexPath   = "/etc/bmc/mappings/index.json"
 	defaultMappingsDir         = "/etc/bmc/mappings"
 	defaultVendorRegistriesDir = "/etc/bmc/vendor-registries"
+	defaultPrometheusCacheTTL  = time.Hour
 )
 
 // PrometheusInventoryConfig queries Prometheus to map BMC IP to vendor/model/firmware.
@@ -55,6 +56,9 @@ func createDefaultConfig() component.Config {
 		Identity: IdentityConfig{
 			IndexIPLookup:     &indexIP,
 			MessageIDFallback: &messageID,
+			Prometheus: PrometheusInventoryConfig{
+				CacheTTL: defaultPrometheusCacheTTL,
+			},
 		},
 	}
 }
