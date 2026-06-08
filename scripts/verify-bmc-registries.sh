@@ -1,29 +1,38 @@
 #!/usr/bin/env bash
-# Verify bmc-registries has the JSON assets required for otel-exporter images.
+# Verify embedded BMC registry JSON under processor modules.
 set -euo pipefail
 
-ROOT="${1:-${BMC_REGISTRIES_PATH:-bmc-registries}}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+NORMALIZE_ROOT="${1:-${REPO_ROOT}/processor/bmceventnormalizeprocessor/registries}"
+FAULT_ROOT="${2:-${REPO_ROOT}/processor/bmcfaultsignalprocessor/registries}"
 
-required=(
+normalize_required=(
 	"asama-bmc-events.json"
-	"fault-eligible-events.json"
 	"mappings/index.json"
 	"mappings/bundles/dell/idrac9/2.8.0.json"
 	"mappings/bundles/hpe/ilo6/3.14.0.json"
 	"mappings/bundles/lenovo/xcc/1.0.0.json"
 )
 
-if [[ ! -d "${ROOT}" ]]; then
-	echo "bmc-registries not found at ${ROOT}" >&2
-	echo "Set BMC_REGISTRIES_PATH or checkout asama-ai/bmc-registries next to this repo." >&2
-	exit 1
-fi
+fault_required=(
+	"fault-eligible-events.json"
+)
 
-for rel in "${required[@]}"; do
-	if [[ ! -f "${ROOT}/${rel}" ]]; then
-		echo "missing required BMC asset: ${ROOT}/${rel}" >&2
+verify_tree() {
+	local root="$1"
+	shift
+	if [[ ! -d "${root}" ]]; then
+		echo "registry directory not found: ${root}" >&2
 		exit 1
 	fi
-done
+	for rel in "$@"; do
+		if [[ ! -f "${root}/${rel}" ]]; then
+			echo "missing required BMC asset: ${root}/${rel}" >&2
+			exit 1
+		fi
+	done
+}
 
-echo "BMC registry assets OK at ${ROOT}"
+verify_tree "${NORMALIZE_ROOT}" "${normalize_required[@]}"
+verify_tree "${FAULT_ROOT}" "${fault_required[@]}"
+echo "BMC registry assets OK"

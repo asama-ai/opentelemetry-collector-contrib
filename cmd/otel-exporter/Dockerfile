@@ -11,9 +11,9 @@ USER ${USER_UID}:${USER_GID}
 
 COPY --from=prep /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY otel-exporter /
-COPY --from=bmc-registries asama-bmc-events.json /etc/bmc/asama-bmc-events.json
-COPY --from=bmc-registries fault-eligible-events.json /etc/bmc/fault-eligible-events.json
-COPY --from=bmc-registries mappings/ /etc/bmc/mappings/
+COPY --from=normalize-registries asama-bmc-events.json /etc/bmc/asama-bmc-events.json
+COPY --from=normalize-registries mappings/ /etc/bmc/mappings/
+COPY --from=fault-registries fault-eligible-events.json /etc/bmc/fault-eligible-events.json
 EXPOSE 4317 55680 55679
 ENTRYPOINT ["/otel-exporter"]
 CMD ["--config", "/etc/otel/config.yaml"]

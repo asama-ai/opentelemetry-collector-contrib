@@ -10,15 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func repoRoot(t *testing.T) string {
+func registriesRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	require.True(t, ok)
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../../../bmc-registries"))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "registries"))
 }
 
 func TestNormalizeHPEDriveFailed(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),
@@ -45,7 +45,7 @@ func TestNormalizeHPEDriveFailed(t *testing.T) {
 }
 
 func TestLookupByIndexIP(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),
@@ -62,7 +62,7 @@ func TestLookupByIndexIP(t *testing.T) {
 }
 
 func TestLookupByUniqueMessageID(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),
@@ -77,7 +77,7 @@ func TestLookupByUniqueMessageID(t *testing.T) {
 }
 
 func TestInventoryResolveIndexIP(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),
@@ -98,7 +98,7 @@ func TestInventoryResolveIndexIP(t *testing.T) {
 }
 
 func TestInventoryResolveMessageIDFallback(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),
@@ -118,7 +118,7 @@ func TestInventoryResolveMessageIDFallback(t *testing.T) {
 }
 
 func TestInventoryResolvePrometheus(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),
@@ -153,7 +153,7 @@ func TestInventoryResolvePrometheus(t *testing.T) {
 }
 
 func TestMatchBundleFromLabels(t *testing.T) {
-	root := repoRoot(t)
+	root := registriesRoot(t)
 	engine, err := NewEngine(
 		filepath.Join(root, "asama-bmc-events.json"),
 		filepath.Join(root, "mappings/index.json"),

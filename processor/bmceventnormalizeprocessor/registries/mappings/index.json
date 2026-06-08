@@ -1,0 +1,48 @@
+{
+  "schema_version": "2.0.0",
+  "description": "Mapping bundles by vendor + bmc_model + firmware_version. Each bundle fault_pairs entry has assert_mappings and deassert_mappings.",
+  "bundles": [
+    {
+      "bundle_id": "hpe.ilo6.3.14.0",
+      "vendor": "hpe",
+      "bmc_family": "ilo",
+      "bmc_model": "ilo6",
+      "firmware_version": "3.14.0",
+      "registry_prefix": "iLOEvents",
+      "registry_version": "3.14.0",
+      "path": "bundles/hpe/ilo6/3.14.0.json",
+      "test_reference": {
+        "bmc_ip": "10.25.40.207",
+        "registry_dir": "nxtgen-test-02-hpe-10.25.40.207"
+      }
+    },
+    {
+      "bundle_id": "dell.idrac9.2.8.0",
+      "vendor": "dell",
+      "bmc_family": "idrac",
+      "bmc_model": "idrac9",
+      "firmware_version": "2.8.0",
+      "registry_prefix": "IDRAC",
+      "registry_version": "2.8.0",
+      "path": "bundles/dell/idrac9/2.8.0.json",
+      "test_reference": {
+        "bmc_ip": "10.25.40.206",
+        "registry_dir": "nxtgen-test-01-dell-10.25.40.206"
+      }
+    },
+    {
+      "bundle_id": "lenovo.xcc.1.0.0",
+      "vendor": "lenovo",
+      "bmc_family": "xcc",
+      "bmc_model": "xcc",
+      "firmware_version": "1.0.0",
+      "registry_prefix": "EventRegistry",
+      "registry_version": "1.0.0",
+      "path": "bundles/lenovo/xcc/1.0.0.json",
+      "test_reference": {
+        "bmc_ip": "10.25.40.208",
+        "registry_dir": "nxtgen-test-03-lenovo-10.25.40.208"
+      }
+    }
+  ]
+}

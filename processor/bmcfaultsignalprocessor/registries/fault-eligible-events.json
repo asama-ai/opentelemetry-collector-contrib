@@ -1,0 +1,562 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Asama events that create or clear faults after normalization. Severity comes from asama-bmc-events.json via normalize.py \u2014 not from this file.",
+  "fault_rules": {
+    "open_on_lifecycle": [
+      "assert"
+    ],
+    "close_on_lifecycle": [
+      "deassert",
+      "info"
+    ],
+    "ignore_lifecycle": [
+      "unknown"
+    ]
+  },
+  "categories": {
+    "power": {
+      "description": "PSU, redundancy, input power",
+      "events": [
+        {
+          "asama_id": "power.psu.failure",
+          "asama_message_key": "PowerPsuFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Power supply %1 has failed or is absent.",
+            "deassert_message": "Power supply %1 is present and operating normally.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "power.redundancy.lost",
+          "asama_message_key": "PowerRedundancyLost",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Power redundancy has been lost. %1",
+            "deassert_message": "Power redundancy has been restored. %1",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "PowerRedundancyRestored"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "power.input.lost",
+          "asama_message_key": "PowerInputLost",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Input power has been lost. %1",
+            "deassert_message": "Input power has been restored. %1",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "thermal": {
+      "description": "Temperature thresholds and thermal shutdown",
+      "events": [
+        {
+          "asama_id": "thermal.threshold.critical",
+          "asama_message_key": "ThermalThresholdCritical",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Temperature sensor %1 crossed a critical or non-recoverable threshold.",
+            "deassert_message": "Temperature sensor %1 has returned below critical threshold.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": [
+                "*2011I",
+                "*deasserted"
+              ]
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "thermal.threshold.warning",
+          "asama_message_key": "ThermalThresholdWarning",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Temperature sensor %1 crossed a warning threshold.",
+            "deassert_message": "Temperature sensor %1 has returned below warning threshold.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": [
+                "*warning*deasserted"
+              ]
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "thermal.shutdown",
+          "asama_message_key": "ThermalShutdown",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Thermal protection initiated a system shutdown. Cause: %1",
+            "deassert_message": "Thermal shutdown condition cleared. %1",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "fan": {
+      "description": "Cooling fan failures and redundancy",
+      "events": [
+        {
+          "asama_id": "fan.failure",
+          "asama_message_key": "FanFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Fan %1 has failed or is below minimum speed.",
+            "deassert_message": "Fan %1 is operating normally.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "FanOk"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "fan.redundancy.lost",
+          "asama_message_key": "FanRedundancyLost",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Cooling fan redundancy has been lost. %1",
+            "deassert_message": "Fan redundancy has been restored.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "FanRedundancyRestored"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "processor": {
+      "description": "CPU failures and thermal trips",
+      "events": [
+        {
+          "asama_id": "processor.thermal.trip",
+          "asama_message_key": "ProcessorThermalTrip",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Thermal trip (over-temperature) on %1.",
+            "deassert_message": "Processor %1 thermal trip condition cleared.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": [
+                "*thermal*deasserted"
+              ]
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "processor.failure",
+          "asama_message_key": "ProcessorFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "%1 failed initialization, BIST, or POST.",
+            "deassert_message": "Processor %1 is operating normally.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "memory": {
+      "description": "DIMM and memory errors",
+      "events": [
+        {
+          "asama_id": "memory.uncorrectable_error",
+          "asama_message_key": "MemoryUncorrectableError",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Uncorrectable memory error detected on %1.",
+            "deassert_message": "Uncorrectable memory errors cleared on %1.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "memory.correctable_error",
+          "asama_message_key": "MemoryCorrectableError",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Correctable memory error threshold exceeded on %1.",
+            "deassert_message": "Correctable memory errors cleared on %1.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "memory.dimm.failure",
+          "asama_message_key": "MemoryDimmFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Memory module %1 failed or is missing.",
+            "deassert_message": "Memory module %1 is operating normally.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "storage": {
+      "description": "Drive, array, and controller faults",
+      "events": [
+        {
+          "asama_id": "storage.drive.failure",
+          "asama_message_key": "StorageDriveFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Physical drive at location %1 has failed.",
+            "deassert_message": "Physical drive at location %1 is functioning properly.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "DriveOk",
+                "DriveOk2"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "storage.drive.predictive_failure",
+          "asama_message_key": "StorageDrivePredictiveFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Drive at location %1 reported predictive failure or SMART warning.",
+            "deassert_message": "Drive wear status for location %1 is OK.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "DriveWearStatusOk",
+                "DriveWearStatusOk2"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "storage.array.degraded",
+          "asama_message_key": "StorageArrayDegraded",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Storage array %1 is in a degraded state.",
+            "deassert_message": "Storage array %1 has returned to optimal state.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "DrvArrOK",
+                "DrvArrControllerOK"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "storage.controller.failure",
+          "asama_message_key": "StorageControllerFailure",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Storage controller %1 has failed.",
+            "deassert_message": "Storage controller %1 is operating properly.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "DrvArrControllerOK"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "network": {
+      "description": "NIC and link reachability",
+      "events": [
+        {
+          "asama_id": "network.link.down",
+          "asama_message_key": "NetworkLinkDown",
+          "fault_type": "hardware",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Network link %1 is down or disconnected.",
+            "deassert_message": "Network link %1 connectivity restored.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [
+                "NicConnectivityRestored"
+              ],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "firmware": {
+      "description": "Firmware update failures",
+      "events": [
+        {
+          "asama_id": "firmware.update.failed",
+          "asama_message_key": "FirmwareUpdateFailed",
+          "fault_type": "platform",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Firmware update failed for %1.",
+            "deassert_message": "Firmware update completed successfully for %1.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    },
+    "platform_health": {
+      "description": "BMC and resource health",
+      "events": [
+        {
+          "asama_id": "bmc.health.degraded",
+          "asama_message_key": "BmcHealthDegraded",
+          "fault_type": "platform",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "BMC health is degraded: %1",
+            "deassert_message": "BMC health has returned to normal.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [
+                "*restored"
+              ],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "resource.status.critical",
+          "asama_message_key": "ResourceStatusCritical",
+          "fault_type": "platform",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Resource %1 health changed to critical.",
+            "deassert_message": "Resource %1 health has returned from critical state.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [
+                "*health is restored*"
+              ],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        },
+        {
+          "asama_id": "resource.status.warning",
+          "asama_message_key": "ResourceStatusWarning",
+          "fault_type": "platform",
+          "create_fault": true,
+          "deassert_pair": {
+            "same_asama_id": true,
+            "assert_lifecycle": "assert",
+            "deassert_lifecycle": "deassert",
+            "assert_message": "Resource %1 health changed to warning.",
+            "deassert_message": "Resource %1 health has returned from warning state.",
+            "component_arg_index": 1,
+            "vendor_clear_message_keys": {
+              "hpe": [],
+              "dell": [],
+              "lenovo": []
+            },
+            "mapping_note": "Curate assert_mappings and deassert_mappings in the vendor/model/firmware bundle"
+          }
+        }
+      ]
+    }
+  },
+  "excluded_from_faults": {
+    "description": "Normalized events stored but do not open faults",
+    "asama_ids": [
+      "system.power.on",
+      "system.power.off",
+      "system.power.cycle",
+      "firmware.update.completed",
+      "audit.config.changed",
+      "audit.user.login",
+      "task.completed",
+      "bmc.network.changed",
+      "security.config.ok",
+      "resource.powered_on",
+      "resource.powered_off"
+    ]
+  },
+  "deassertion": {
+    "description": "Fault raise and clear use the same asama_id. Assert opens a fault; deassert closes the matching open fault. Description pairs below document expected user-facing text; live close text comes from the normalized vendor clear event.",
+    "close_match_key": [
+      "bmc_ip",
+      "asama_id",
+      "component_from_component_arg_index"
+    ],
+    "vendor_clear_signals": {
+      "hpe": "Separate MessageId with Oem.Hpe.ClearingLogic or ClearsMessage list",
+      "lenovo": "Paired key (often suffix I) with message text 'has deasserted'",
+      "dell": "Separate MessageId with Severity OK/Informational and text restored/cleared/recovered"
+    }
+  }
+}

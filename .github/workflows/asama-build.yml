@@ -14,7 +14,6 @@ permissions:
 env:
   GOARCH: amd64
   GOOS: linux
-  BMC_REGISTRIES_REPOSITORY: ${{ vars.BMC_REGISTRIES_REPOSITORY || format('{0}/bmc-registries', github.repository_owner) }}
 
 jobs:
   build-collector:
@@ -89,11 +88,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout BMC registries
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.BMC_REGISTRIES_REPOSITORY }}
-          path: bmc-registries
       - uses: actions/setup-go@v5
         with:
           go-version: oldstable
@@ -143,7 +137,7 @@ jobs:
       - name: Verify BMC registry assets
         run: |
           chmod +x ./scripts/verify-bmc-registries.sh
-          ./scripts/verify-bmc-registries.sh bmc-registries
+          ./scripts/verify-bmc-registries.sh
       
       - name: Prepare Docker context
         run: cp ./bin/otel-exporter_${GOOS}_${GOARCH} ./cmd/otel-exporter/otel-exporter
@@ -153,7 +147,8 @@ jobs:
         with:
           context: ./cmd/otel-exporter
           build-contexts: |
-            bmc-registries=./bmc-registries
+            normalize-registries=./processor/bmceventnormalizeprocessor/registries
+            fault-registries=./processor/bmcfaultsignalprocessor/registries
           platforms: linux/amd64
           push: true
           tags: ${{ steps.get_info.outputs.set_latest == 'true' && format('ghcr.io/{0}/otel-exporter:{1},ghcr.io/{0}/otel-exporter:latest', steps.get_info.outputs.owner, steps.get_info.outputs.version) || format('ghcr.io/{0}/otel-exporter:{1}', steps.get_info.outputs.owner, steps.get_info.outputs.version) }}
