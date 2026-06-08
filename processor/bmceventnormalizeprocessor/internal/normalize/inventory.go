@@ -93,15 +93,15 @@ const (
 
 	defaultNeo4jDatabase = "neo4j"
 	defaultNeo4jQuery      = `MATCH (d:Device)
-WITH d, properties(d) AS p
-WHERE toLower(coalesce(p.out_of_band_ip, p.oob_ip, p.bmc_ip, '')) = toLower($bmc_ip)
+WITH d, split(coalesce(d.oob_ip, d.out_of_band_ip, d.bmc_ip, ''), '/')[0] AS oob_host
+WHERE toLower(oob_host) = toLower(split($bmc_ip, '/')[0])
 OPTIONAL MATCH (d)-[:HAS_TYPE]->(:DeviceType)-[:MANUFACTURED_BY]->(m:Manufacturer)
-OPTIONAL MATCH (d)-[:HAS_BMC]->(bmc:BMCSlot)
+OPTIONAL MATCH (d)-[:HAS_BMC_SLOT]->(:BMCSlot)-[:HAS_BMC]->(:BMC)-[:IS_OF_TYPE]->(bt:BmcType)
 RETURN coalesce(d.hostname, d.name, d.host_name) AS hostname,
        coalesce(d.serial_number, d.serial, d.service_tag) AS serial_number,
        m.name AS manufacturer,
-       coalesce(bmc.model, bmc.name) AS model,
-       coalesce(bmc.firmware_version, bmc.firmware) AS firmware_version
+       coalesce(bt.part_number, bt.bmc_id) AS model,
+       bt.name AS firmware_version
 LIMIT 1`
 )
 
@@ -269,7 +269,7 @@ func (r *InventoryResolver) storeLookup(bmcIP string, id Identity) {
 func (r *InventoryResolver) identityFromInventoryLabels(labels map[string]string, source string) (Identity, bool) {
 	id, matched := r.engine.matchBundleFromLabels(
 		firstNonEmpty(labels, "manufacturer", "manufacturer_name", "vendor"),
-		firstNonEmpty(labels, "model", "bmc_model"),
+		firstNonEmpty(labels, "model", "bmc_model", "part_number"),
 		firstNonEmpty(labels, "firmware_version", "firmware"),
 	)
 	id.Hostname = strings.TrimSpace(firstNonEmpty(labels, "hostname", "host_name", "name"))

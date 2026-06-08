@@ -458,18 +458,22 @@ func modelMatchesBundle(b indexBundle, promModel string) bool {
 	if promModel == "" {
 		return true
 	}
+	normalized := strings.ReplaceAll(promModel, "_", " ")
 	bmcModel := strings.ToLower(b.BMCModel)
-	if strings.Contains(promModel, bmcModel) {
+	if strings.Contains(promModel, bmcModel) || strings.Contains(normalized, bmcModel) {
 		return true
 	}
 	switch bmcModel {
 	case "ilo6":
-		return strings.Contains(promModel, "ilo 6") || strings.Contains(promModel, "ilo6") ||
-			strings.Contains(promModel, "ilo 5") || strings.Contains(promModel, "ilo5")
+		return strings.Contains(normalized, "ilo 6") || strings.Contains(promModel, "ilo6") ||
+			strings.Contains(normalized, "ilo 5") || strings.Contains(promModel, "ilo5") ||
+			strings.Contains(promModel, "ilo_5")
 	case "idrac9":
-		return strings.Contains(promModel, "idrac") || strings.Contains(promModel, "14g") || strings.Contains(promModel, "15g")
+		return strings.Contains(promModel, "idrac") || strings.Contains(promModel, "13g") ||
+			strings.Contains(promModel, "14g") || strings.Contains(promModel, "15g")
 	case "xcc":
-		return strings.Contains(promModel, "xclarity") || strings.Contains(promModel, "xcc")
+		return strings.Contains(promModel, "xclarity") || strings.Contains(promModel, "xcc") ||
+			strings.Contains(promModel, "lenovo_xclarity")
 	}
 	return false
 }
