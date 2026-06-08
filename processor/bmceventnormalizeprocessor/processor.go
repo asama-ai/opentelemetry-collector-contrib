@@ -6,6 +6,7 @@ package bmceventnormalizeprocessor // import "github.com/open-telemetry/opentele
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -33,6 +34,13 @@ func newNormalizeProcessor(cfg *Config) (*normalizeProcessor, error) {
 		return nil, fmt.Errorf("load normalization engine: %w", err)
 	}
 	inventory := normalize.NewInventoryResolver(normalize.InventoryConfig{
+		Neo4jEndpoint:      firstNonEmptyStr(cfg.Identity.Neo4j.URL, cfg.Identity.Neo4j.Endpoint),
+		Neo4jDatabase:      cfg.Identity.Neo4j.Database,
+		Neo4jUsername:      cfg.Identity.Neo4j.Username,
+		Neo4jPassword:      cfg.Identity.Neo4j.Password,
+		Neo4jQuery:         cfg.Identity.Neo4j.Query,
+		Neo4jTimeout:       cfg.Identity.Neo4j.Timeout,
+		Neo4jCacheTTL:      cfg.Identity.Neo4j.CacheTTL,
 		PrometheusEndpoint: cfg.Identity.Prometheus.Endpoint,
 		PrometheusQuery:    cfg.Identity.Prometheus.Query,
 		PrometheusTimeout:  cfg.Identity.Prometheus.Timeout,
@@ -334,4 +342,13 @@ func createLogsProcessor(
 		proc.ProcessLogs,
 		processorhelper.WithCapabilities(processorCapabilities),
 	)
+}
+
+func firstNonEmptyStr(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }

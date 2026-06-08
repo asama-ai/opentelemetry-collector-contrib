@@ -199,6 +199,76 @@ func TestInventoryPrometheusCache(t *testing.T) {
 	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Prometheus again")
 }
 
+func TestInventoryResolveNeo4j(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Contains(t, r.URL.Path, "/db/neo4j/tx/commit")
+		_, _ = w.Write([]byte(`{
+			"results":[{"columns":["hostname","serial_number","manufacturer","model","firmware_version"],"data":[{"row":["nxtegn-test-02","SGH810WXP1","HPE","iLO 5","iLO 5 v3.08"]}]}],
+			"errors":[]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		Neo4jEndpoint:     srv.URL,
+		Neo4jDatabase:     "neo4j",
+		IndexIPLookup:     false,
+		MessageIDFallback: false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "hpe", id.Vendor)
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, "SGH810WXP1", id.SerialNumber)
+	require.Equal(t, identitySourceNeo4j, id.Source)
+}
+
+func TestInventoryNeo4jCache(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{
+			"results":[{"columns":["hostname","manufacturer"],"data":[{"row":["nxtegn-test-02","HPE"]}]}],
+			"errors":[]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		Neo4jEndpoint: srv.URL,
+		Neo4jCacheTTL: time.Hour,
+		IndexIPLookup: false,
+		MessageIDFallback: false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls)
+
+	id = resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Neo4j again")
+}
+
 func TestMatchBundleFromLabels(t *testing.T) {
 	root := registriesRoot(t)
 	engine, err := NewEngine(
