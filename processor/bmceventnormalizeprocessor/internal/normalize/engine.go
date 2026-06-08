@@ -119,11 +119,18 @@ type mappingSide struct {
 }
 
 type bundleFile struct {
-	BundleID        string      `json:"bundle_id"`
-	Vendor          string      `json:"vendor"`
-	BMCModel        string      `json:"bmc_model"`
-	FirmwareVersion string      `json:"firmware_version"`
-	FaultPairs      []faultPair `json:"fault_pairs"`
+	BundleID        string `json:"bundle_id"`
+	Vendor          string `json:"vendor"`
+	BMCModel        string `json:"bmc_model"`
+	FirmwareVersion string `json:"firmware_version"`
+	Registry        struct {
+		PrimaryFile string `json:"primary_file"`
+	} `json:"registry"`
+	TestReference struct {
+		BMCIP       string `json:"bmc_ip"`
+		RegistryDir string `json:"registry_dir"`
+	} `json:"test_reference"`
+	FaultPairs []faultPair `json:"fault_pairs"`
 }
 
 // Engine loads Asama registry and vendor mapping bundles for normalization.
@@ -178,6 +185,14 @@ func (e *Engine) reload() error {
 		return fmt.Errorf("parse mappings index: %w", err)
 	}
 	return nil
+}
+
+// LookupBundle returns mapping bundle metadata for vendor registry resolution.
+func (e *Engine) LookupBundle(vendor, bmcModel, firmwareVersion, bundleID string) (bundleFile, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	_, bundle, err := e.loadBundle(vendor, bmcModel, firmwareVersion, bundleID)
+	return bundle, err
 }
 
 func (e *Engine) Normalize(vendor, messageID, vendorMessage, severity, bmcIP, bmcModel, firmwareVersion, bundleID, eventTime string, vendorArgs []string) Result {

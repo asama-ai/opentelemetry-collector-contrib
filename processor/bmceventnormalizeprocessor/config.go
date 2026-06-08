@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	defaultAsamaRegistryPath = "/etc/bmc/asama-bmc-events.json"
-	defaultMappingsIndexPath = "/etc/bmc/mappings/index.json"
-	defaultMappingsDir       = "/etc/bmc/mappings"
+	defaultAsamaRegistryPath   = "/etc/bmc/asama-bmc-events.json"
+	defaultMappingsIndexPath   = "/etc/bmc/mappings/index.json"
+	defaultMappingsDir         = "/etc/bmc/mappings"
+	defaultVendorRegistriesDir = "/etc/bmc/vendor-registries"
 )
 
 // PrometheusInventoryConfig queries Prometheus to map BMC IP to vendor/model/firmware.
@@ -36,19 +37,21 @@ type IdentityConfig struct {
 
 // Config configures the BMC event normalize processor.
 type Config struct {
-	AsamaRegistryPath string         `mapstructure:"asama_registry_path"`
-	MappingsIndexPath string         `mapstructure:"mappings_index_path"`
-	MappingsDir       string         `mapstructure:"mappings_dir"`
-	Identity          IdentityConfig `mapstructure:"identity"`
+	AsamaRegistryPath   string         `mapstructure:"asama_registry_path"`
+	MappingsIndexPath   string         `mapstructure:"mappings_index_path"`
+	MappingsDir         string         `mapstructure:"mappings_dir"`
+	VendorRegistriesDir string         `mapstructure:"vendor_registries_dir"`
+	Identity            IdentityConfig `mapstructure:"identity"`
 }
 
 func createDefaultConfig() component.Config {
 	indexIP := true
 	messageID := true
 	return &Config{
-		AsamaRegistryPath: defaultAsamaRegistryPath,
-		MappingsIndexPath: defaultMappingsIndexPath,
-		MappingsDir:       defaultMappingsDir,
+		AsamaRegistryPath:   defaultAsamaRegistryPath,
+		MappingsIndexPath:   defaultMappingsIndexPath,
+		MappingsDir:         defaultMappingsDir,
+		VendorRegistriesDir: defaultVendorRegistriesDir,
 		Identity: IdentityConfig{
 			IndexIPLookup:     &indexIP,
 			MessageIDFallback: &messageID,

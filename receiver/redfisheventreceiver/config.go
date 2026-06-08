@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	defaultReadTimeout        = "500ms"
-	defaultWriteTimeout       = "500ms"
+	defaultReadTimeout        = "10s"
+	defaultWriteTimeout       = "10s"
 	defaultPath               = "/redfish/events"
 	defaultHealthPath         = "/health_check"
 	defaultMaxRequestBodySize = 1024 * 1024 // 1MB

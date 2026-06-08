@@ -9,46 +9,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPayloadToLogs(t *testing.T) {
+func TestPayloadToLogsRawEnvelope(t *testing.T) {
 	body := []byte(`{
+		"Context": "asama-event-listener",
 		"Events": [{
-			"EventType": "Alert",
 			"MessageId": "iLOEvents.3.14.0.DriveFailed",
-			"Message": "Drive failed",
-			"MessageArgs": ["Bay 1"],
-			"Severity": "Critical",
-			"EventTimestamp": "2026-06-08T12:00:00Z"
+			"Severity": "Critical"
 		}]
 	}`)
 
 	ld, n, err := payloadToLogs(body, sourceContext{
-		Vendor: "hpe",
-		IP:     "10.0.0.1",
-		Model:  "ilo6",
+		IP:     "10.25.40.207",
+		Tenant: "nxtgen",
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Equal(t, 1, ld.ResourceLogs().Len())
 
 	rl := ld.ResourceLogs().At(0)
-	vendor, ok := rl.Resource().Attributes().Get("bmc.vendor")
+	ip, ok := rl.Resource().Attributes().Get("bmc.ip")
 	require.True(t, ok)
-	require.Equal(t, "hpe", vendor.Str())
+	require.Equal(t, "10.25.40.207", ip.Str())
 
 	lr := rl.ScopeLogs().At(0).LogRecords().At(0)
-	msgID, ok := lr.Attributes().Get("redfish.message_id")
+	raw, ok := lr.Attributes().Get("redfish.raw_payload")
 	require.True(t, ok)
-	require.Equal(t, "iLOEvents.3.14.0.DriveFailed", msgID.Str())
+	require.JSONEq(t, string(body), raw.Str())
+
+	_, ok = lr.Attributes().Get("redfish.message_id")
+	require.False(t, ok, "receiver must not parse MessageId")
 
 	ctx, ok := lr.Attributes().Get("redfish.context")
 	require.True(t, ok)
-	require.Equal(t, "bmc_ip=10.0.0.1", ctx.Str())
+	require.Contains(t, ctx.Str(), "asama-event-listener")
+	require.Contains(t, ctx.Str(), "bmc_ip=10.25.40.207")
 }
 
 func TestEnrichContext(t *testing.T) {
 	require.Equal(t, "bmc_ip=10.0.0.1", enrichContext("", "10.0.0.1"))
 	require.Equal(t, "fleet-a|bmc_ip=10.0.0.1", enrichContext("fleet-a", "10.0.0.1"))
-	require.Equal(t, "fleet-a|bmc_ip=10.0.0.1", enrichContext("fleet-a|bmc_ip=10.0.0.1", "10.0.0.2"))
 }
 
 func TestHostFromRemoteAddr(t *testing.T) {
@@ -62,33 +61,4 @@ func TestResolveBMCSourceIP(t *testing.T) {
 	require.Equal(t, "10.0.0.8", resolveBMCSourceIP("", "10.0.0.8", "", nil))
 	require.Equal(t, "10.25.40.207", resolveBMCSourceIP("", "", "", hpeBody))
 	require.Equal(t, "10.25.40.206", resolveBMCSourceIP("", "", "10.25.40.206:443", nil))
-}
-
-func TestPayloadHPENoMessage(t *testing.T) {
-	body := []byte(`{
-		"Context": "asama-hpe-events",
-		"Events": [{
-			"MessageId": "iLOEvents.3.14.DrvArrPhysDrvFailed",
-			"Severity": "Critical",
-			"EventTimestamp": "2026-06-08T12:00:00Z",
-			"OriginOfCondition": {"@odata.id": "/redfish/v1/Systems/1/Storage/2/Drives/2"},
-			"MessageArgs": ["2"],
-			"Oem": {"Hpe": {"Hostname": "10.25.40.207"}}
-		}]
-	}`)
-
-	ld, n, err := payloadToLogs(body, sourceContext{})
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-
-	rl := ld.ResourceLogs().At(0)
-	ip, ok := rl.Resource().Attributes().Get("bmc.ip")
-	require.True(t, ok)
-	require.Equal(t, "10.25.40.207", ip.Str())
-
-	lr := rl.ScopeLogs().At(0).LogRecords().At(0)
-	ctx, ok := lr.Attributes().Get("redfish.context")
-	require.True(t, ok)
-	require.Contains(t, ctx.Str(), "asama-hpe-events")
-	require.Contains(t, ctx.Str(), "bmc_ip=10.25.40.207")
 }

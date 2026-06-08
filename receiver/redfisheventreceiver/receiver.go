@@ -150,12 +150,9 @@ func (er *eventReceiver) handleReq(w http.ResponseWriter, r *http.Request, _ htt
 	)
 
 	src := sourceContext{
-		Vendor:   r.Header.Get(er.cfg.SourceHeaders.Vendor),
-		IP:       bmcIP,
-		Model:    r.Header.Get(er.cfg.SourceHeaders.Model),
-		Firmware: r.Header.Get(er.cfg.SourceHeaders.Firmware),
-		Hostname: r.Header.Get(er.cfg.SourceHeaders.Hostname),
-		Tenant:   r.Header.Get(er.cfg.SourceHeaders.Tenant),
+		IP:            bmcIP,
+		Tenant:        r.Header.Get(er.cfg.SourceHeaders.Tenant),
+		SenderAddress: r.Header.Get(er.cfg.SourceHeaders.SenderAddress),
 	}
 
 	ld, numLogs, err := payloadToLogs(body, src)
