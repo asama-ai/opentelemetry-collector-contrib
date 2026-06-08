@@ -142,9 +142,16 @@ func (er *eventReceiver) handleReq(w http.ResponseWriter, r *http.Request, _ htt
 		return
 	}
 
+	bmcIP := resolveBMCSourceIP(
+		r.Header.Get(er.cfg.SourceHeaders.IP),
+		r.Header.Get(er.cfg.SourceHeaders.SenderAddress),
+		r.RemoteAddr,
+		body,
+	)
+
 	src := sourceContext{
 		Vendor:   r.Header.Get(er.cfg.SourceHeaders.Vendor),
-		IP:       r.Header.Get(er.cfg.SourceHeaders.IP),
+		IP:       bmcIP,
 		Model:    r.Header.Get(er.cfg.SourceHeaders.Model),
 		Firmware: r.Header.Get(er.cfg.SourceHeaders.Firmware),
 		Hostname: r.Header.Get(er.cfg.SourceHeaders.Hostname),

@@ -21,7 +21,8 @@ import (
 var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 type normalizeProcessor struct {
-	engine *normalize.Engine
+	engine    *normalize.Engine
+	inventory *normalize.InventoryResolver
 }
 
 func newNormalizeProcessor(cfg *Config) (*normalizeProcessor, error) {
@@ -29,7 +30,16 @@ func newNormalizeProcessor(cfg *Config) (*normalizeProcessor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load normalization engine: %w", err)
 	}
-	return &normalizeProcessor{engine: engine}, nil
+	inventory := normalize.NewInventoryResolver(normalize.InventoryConfig{
+		PrometheusEndpoint: cfg.Identity.Prometheus.Endpoint,
+		PrometheusQuery:    cfg.Identity.Prometheus.Query,
+		PrometheusTimeout:  cfg.Identity.Prometheus.Timeout,
+		PrometheusCacheTTL: cfg.Identity.Prometheus.CacheTTL,
+		IndexIPLookup:      cfg.indexIPLookupEnabled(),
+		MessageIDFallback:  cfg.messageIDFallbackEnabled(),
+	})
+	inventory.SetEngine(engine)
+	return &normalizeProcessor{engine: engine, inventory: inventory}, nil
 }
 
 func (p *normalizeProcessor) ProcessLogs(_ context.Context, ld plog.Logs) (plog.Logs, error) {
@@ -52,15 +62,31 @@ func (p *normalizeProcessor) ProcessLogs(_ context.Context, ld plog.Logs) (plog.
 					continue
 				}
 
+				identity := p.inventory.Resolve(bmcIP, messageID, vendor, bmcModel, firmware)
+				resVendor := identity.Vendor
+				resModel := identity.BMCModel
+				resFirmware := identity.FirmwareVersion
+				resBundleID := bundleID
+				if identity.BundleID != "" {
+					resBundleID = identity.BundleID
+				}
+				if identity.Source != "" {
+					putIfNonEmpty(resAttrs, "bmc.vendor", resVendor)
+					putIfNonEmpty(resAttrs, "bmc.model", resModel)
+					putIfNonEmpty(resAttrs, "bmc.firmware_version", resFirmware)
+					putIfNonEmpty(resAttrs, "bmc.bundle_id", resBundleID)
+					attrs.PutStr("asama.identity_source", identity.Source)
+				}
+
 				result := p.engine.Normalize(
-					vendor,
+					resVendor,
 					messageID,
 					attrStr(attrs, "redfish.message"),
 					attrStr(attrs, "redfish.severity"),
 					bmcIP,
-					bmcModel,
-					firmware,
-					bundleID,
+					resModel,
+					resFirmware,
+					resBundleID,
 					attrStr(attrs, "redfish.event_timestamp"),
 					attrStringSlice(attrs, "redfish.message_args"),
 				)
@@ -123,6 +149,12 @@ func attrStringSlice(m pcommon.Map, key string) []string {
 		out = append(out, v.Slice().At(i).Str())
 	}
 	return out
+}
+
+func putIfNonEmpty(attrs pcommon.Map, key, value string) {
+	if value != "" {
+		attrs.PutStr(key, value)
+	}
 }
 
 // NewFactory returns a factory for the BMC event normalize processor.

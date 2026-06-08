@@ -22,12 +22,13 @@ const (
 
 // SourceHeaderKeys maps logical BMC fields to HTTP header names for enrichment.
 type SourceHeaderKeys struct {
-	Vendor   string `mapstructure:"vendor"`
-	IP       string `mapstructure:"ip"`
-	Model    string `mapstructure:"model"`
-	Firmware string `mapstructure:"firmware"`
-	Hostname string `mapstructure:"hostname"`
-	Tenant   string `mapstructure:"tenant"`
+	Vendor         string `mapstructure:"vendor"`
+	IP             string `mapstructure:"ip"`
+	Model          string `mapstructure:"model"`
+	Firmware       string `mapstructure:"firmware"`
+	Hostname       string `mapstructure:"hostname"`
+	Tenant         string `mapstructure:"tenant"`
+	SenderAddress  string `mapstructure:"sender_address"`
 }
 
 // Config defines configuration for the Redfish EventService push receiver.
@@ -50,12 +51,13 @@ func createDefaultConfig() component.Config {
 		Path:         defaultPath,
 		HealthPath:   defaultHealthPath,
 		SourceHeaders: SourceHeaderKeys{
-			Vendor:   "X-BMC-Vendor",
-			IP:       "X-BMC-IP",
-			Model:    "X-BMC-Model",
-			Firmware: "X-BMC-Firmware",
-			Hostname: "X-BMC-Hostname",
-			Tenant:   "X-Tenant",
+			Vendor:        "X-BMC-Vendor",
+			IP:            "X-BMC-IP",
+			Model:         "X-BMC-Model",
+			Firmware:      "X-BMC-Firmware",
+			Hostname:      "X-BMC-Hostname",
+			Tenant:        "X-Tenant",
+			SenderAddress: "Sender-Address",
 		},
 	}
 }

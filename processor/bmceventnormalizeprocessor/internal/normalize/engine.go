@@ -86,13 +86,18 @@ type asamaMessage struct {
 }
 
 type indexFile struct {
-	Bundles []struct {
-		BundleID        string `json:"bundle_id"`
-		Vendor          string `json:"vendor"`
-		BMCModel        string `json:"bmc_model"`
-		FirmwareVersion string `json:"firmware_version"`
-		Path            string `json:"path"`
-	} `json:"bundles"`
+	Bundles []indexBundle `json:"bundles"`
+}
+
+type indexBundle struct {
+	BundleID        string `json:"bundle_id"`
+	Vendor          string `json:"vendor"`
+	BMCModel        string `json:"bmc_model"`
+	FirmwareVersion string `json:"firmware_version"`
+	Path            string `json:"path"`
+	TestReference   struct {
+		BMCIP string `json:"bmc_ip"`
+	} `json:"test_reference"`
 }
 
 type faultPair struct {
@@ -302,6 +307,173 @@ func (e *Engine) loadBundle(vendor, bmcModel, firmwareVersion, bundleID string) 
 	e.bundleCache[cacheKey] = idx
 	e.bundleMeta[cacheKey] = bundle
 	return idx, bundle, nil
+}
+
+func (e *Engine) lookupByIndexIP(bmcIP string) (Identity, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	bmcIP = normalizeIP(bmcIP)
+	for _, b := range e.index.Bundles {
+		if b.TestReference.BMCIP == bmcIP {
+			return Identity{
+				Vendor:          strings.ToLower(b.Vendor),
+				BMCModel:        b.BMCModel,
+				FirmwareVersion: b.FirmwareVersion,
+				BundleID:        b.BundleID,
+				Source:          identitySourceIndexIP,
+			}, true
+		}
+	}
+	return Identity{}, false
+}
+
+func (e *Engine) lookupByUniqueMessageID(messageID string) (Identity, bool) {
+	e.mu.RLock()
+	index := e.index
+	mappingsDir := e.mappingsDir
+	e.mu.RUnlock()
+
+	var matches []indexBundle
+	for _, b := range index.Bundles {
+		idx, err := e.loadBundleForEntry(b, mappingsDir)
+		if err != nil {
+			continue
+		}
+		if mapping := lookupMapping(messageID, idx); mapping.VendorMessageID != "" || mapping.VendorKey != "" {
+			matches = append(matches, b)
+		}
+	}
+	if len(matches) != 1 {
+		return Identity{}, false
+	}
+	b := matches[0]
+	return Identity{
+		Vendor:          strings.ToLower(b.Vendor),
+		BMCModel:        b.BMCModel,
+		FirmwareVersion: b.FirmwareVersion,
+		BundleID:        b.BundleID,
+		Source:          identitySourceMessageID,
+	}, true
+}
+
+func (e *Engine) loadBundleForEntry(b indexBundle, mappingsDir string) (bundleIndex, error) {
+	e.mu.RLock()
+	cacheKey := strings.Join([]string{b.Vendor, b.BMCModel, b.FirmwareVersion, b.BundleID}, "|")
+	if idx, ok := e.bundleCache[cacheKey]; ok {
+		e.mu.RUnlock()
+		return idx, nil
+	}
+	e.mu.RUnlock()
+
+	path := filepath.Join(mappingsDir, b.Path)
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return bundleIndex{}, err
+	}
+	var bundle bundleFile
+	if err := json.Unmarshal(bytes, &bundle); err != nil {
+		return bundleIndex{}, err
+	}
+	idx := buildIndexFromBundle(bundle)
+
+	e.mu.Lock()
+	e.bundleCache[cacheKey] = idx
+	e.bundleMeta[cacheKey] = bundle
+	e.mu.Unlock()
+	return idx, nil
+}
+
+func (e *Engine) matchBundleFromLabels(manufacturer, model, firmware string) (Identity, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	vendor := normalizeVendor(manufacturer)
+	if vendor == "" {
+		return Identity{}, false
+	}
+
+	var matches []indexBundle
+	for _, b := range e.index.Bundles {
+		if strings.ToLower(b.Vendor) != vendor {
+			continue
+		}
+		if firmware != "" && !firmwareMatches(b.FirmwareVersion, firmware) {
+			continue
+		}
+		if model != "" && !modelMatchesBundle(b, model) {
+			continue
+		}
+		matches = append(matches, b)
+	}
+	if len(matches) == 0 && firmware != "" {
+		for _, b := range e.index.Bundles {
+			if strings.ToLower(b.Vendor) == vendor && firmwareMatches(b.FirmwareVersion, firmware) {
+				matches = append(matches, b)
+			}
+		}
+	}
+	if len(matches) != 1 {
+		return Identity{}, false
+	}
+	b := matches[0]
+	return Identity{
+		Vendor:          strings.ToLower(b.Vendor),
+		BMCModel:        b.BMCModel,
+		FirmwareVersion: b.FirmwareVersion,
+		BundleID:        b.BundleID,
+	}, true
+}
+
+func normalizeVendor(manufacturer string) string {
+	m := strings.ToLower(strings.TrimSpace(manufacturer))
+	switch {
+	case strings.Contains(m, "hpe"), strings.Contains(m, "hewlett"):
+		return "hpe"
+	case strings.Contains(m, "dell"):
+		return "dell"
+	case strings.Contains(m, "lenovo"):
+		return "lenovo"
+	default:
+		return m
+	}
+}
+
+func modelMatchesBundle(b indexBundle, promModel string) bool {
+	promModel = strings.ToLower(strings.TrimSpace(promModel))
+	if promModel == "" {
+		return true
+	}
+	bmcModel := strings.ToLower(b.BMCModel)
+	if strings.Contains(promModel, bmcModel) {
+		return true
+	}
+	switch bmcModel {
+	case "ilo6":
+		return strings.Contains(promModel, "ilo 6") || strings.Contains(promModel, "ilo6")
+	case "idrac9":
+		return strings.Contains(promModel, "idrac") || strings.Contains(promModel, "14g") || strings.Contains(promModel, "15g")
+	case "xcc":
+		return strings.Contains(promModel, "xclarity") || strings.Contains(promModel, "xcc")
+	}
+	return false
+}
+
+func firmwareMatches(bundleFW, promFW string) bool {
+	bundleFW = strings.TrimSpace(bundleFW)
+	promFW = strings.TrimSpace(promFW)
+	if bundleFW == promFW {
+		return true
+	}
+	return normalizeFirmware(bundleFW) == normalizeFirmware(promFW)
+}
+
+func normalizeFirmware(v string) string {
+	v = strings.TrimSpace(v)
+	parts := strings.Split(v, ".")
+	for len(parts) > 1 && parts[len(parts)-1] == "0" {
+		parts = parts[:len(parts)-1]
+	}
+	return strings.Join(parts, ".")
 }
 
 func resolveBundlePath(index indexFile, mappingsDir, vendor, bmcModel, firmwareVersion, bundleID string) (string, bundleFile, error) {
