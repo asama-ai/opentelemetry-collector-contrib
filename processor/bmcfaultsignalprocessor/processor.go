@@ -29,25 +29,16 @@ import (
 var processorCapabilities = consumer.Capabilities{MutatesData: false}
 
 type ingestPayload struct {
-	Action    string `json:"action"`
-	AsamaID   string `json:"asama_id"`
-	Lifecycle string `json:"lifecycle"`
-	Severity  string `json:"severity"`
-	FaultKey  string `json:"fault_key"`
-	Message   string `json:"message"`
-	FaultType string `json:"fault_type"`
-	BMC       struct {
-		Vendor string `json:"vendor"`
-		IP     string `json:"ip"`
-		Model  string `json:"model"`
-	} `json:"bmc"`
-	Component struct {
-		Location string `json:"location"`
-	} `json:"component"`
-	SourceEvent struct {
-		VendorMessageID string `json:"vendor_message_id"`
-		EventTime       string `json:"event_time"`
-	} `json:"source_event"`
+	Action       string `json:"action"`
+	Hostname     string `json:"hostname"`
+	SensorType   string `json:"sensor_type"`
+	SensorNumber string `json:"sensor_number"`
+	EventType    string `json:"event_type"`
+	Description  string `json:"description"`
+	FaultType    string `json:"fault_type,omitempty"`
+	SensorName   string `json:"sensor_name,omitempty"`
+	EventID      string `json:"event_id,omitempty"`
+	Timestamp    string `json:"timestamp,omitempty"`
 }
 
 type faultSignalProcessor struct {
@@ -80,8 +71,6 @@ func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (p
 		rl := ld.ResourceLogs().At(i)
 		resAttrs := rl.Resource().Attributes()
 		bmcIP := firstNonEmpty(attrStr(resAttrs, "bmc.ip"), attrStr(resAttrs, "bmc.hostname"))
-		bmcVendor := attrStr(resAttrs, "bmc.vendor")
-		bmcModel := attrStr(resAttrs, "bmc.model")
 		tenant := p.cfg.Tenant
 		if tenant == "" && p.cfg.TenantAttribute != "" {
 			tenant = attrStr(resAttrs, p.cfg.TenantAttribute)
@@ -103,22 +92,22 @@ func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (p
 				}
 				component := attrStr(attrs, "asama.component")
 				faultKey := computeFaultKey(bmcIP, asamaID, component)
+				hostname := firstNonEmpty(bmcIP, attrStr(resAttrs, "bmc.hostname"))
 
 				payload := ingestPayload{
-					Action:    action,
-					AsamaID:   asamaID,
-					Lifecycle: lifecycle,
-					Severity:  attrStr(attrs, "asama.severity"),
-					FaultKey:  faultKey,
-					Message:   attrStr(attrs, "asama.message"),
-					FaultType: rule.FaultType,
+					Action:       action,
+					Hostname:     hostname,
+					SensorType:   "bmc",
+					SensorNumber: faultKey,
+					EventType:    asamaID,
+					Description:  attrStr(attrs, "asama.message"),
+					FaultType:    rule.FaultType,
+					SensorName:   component,
+					Timestamp:    attrStr(attrs, "redfish.event_timestamp"),
 				}
-				payload.BMC.Vendor = bmcVendor
-				payload.BMC.IP = bmcIP
-				payload.BMC.Model = bmcModel
-				payload.Component.Location = component
-				payload.SourceEvent.VendorMessageID = attrStr(attrs, "redfish.message_id")
-				payload.SourceEvent.EventTime = attrStr(attrs, "redfish.event_timestamp")
+				if msgID := attrStr(attrs, "redfish.message_id"); msgID != "" {
+					payload.EventID = "bmc-" + msgID
+				}
 
 				if err := p.postIngest(ctx, tenant, payload); err != nil {
 					p.logger.Error("bmc fault ingest failed", zap.Error(err), zap.String("asama_id", asamaID), zap.String("action", action))

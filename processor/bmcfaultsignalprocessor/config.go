@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultFaultCatalogPath = "/etc/bmc/fault-eligible-events.json"
-	defaultEndpoint         = "http://localhost:8080/api/v1/faults/ingest/bmc"
+	defaultEndpoint         = "http://localhost:8080/api/v1/faults/ingest"
 	defaultTimeout          = 5 * time.Second
 	defaultTenantHeader     = "X-Tenant"
 )
