@@ -1,0 +1,671 @@
+{
+  "schema_version": "2.0.0",
+  "bundle_id": "dell.idrac9.7.10.70.00",
+  "vendor": "dell",
+  "bmc_family": "idrac",
+  "bmc_model": "idrac9",
+  "firmware_version": "7.10.70.00",
+  "registry": {
+    "prefix": "IDRAC",
+    "version": "2.9.0",
+    "primary_file": "eemiregistry.json"
+  },
+  "asama_registry_prefix": "AsamaBmc",
+  "asama_registry_version": "1.0.0",
+  "test_reference": {
+    "bmc_ip": "10.138.163.172",
+    "registry_dir": "nxtgen-test-amd-dell-10.138.163.172"
+  },
+  "fault_pairs": [
+    {
+      "asama_id": "power.psu.failure",
+      "asama_message_key": "PowerPsuFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PSU0001",
+          "vendor_key": "PSU0001",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PSU0000",
+          "vendor_key": "PSU0000",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "power.redundancy.lost",
+      "asama_message_key": "PowerRedundancyLost",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.RDU0012",
+          "vendor_key": "RDU0012",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.RDU0011",
+          "vendor_key": "RDU0011",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "power.input.lost",
+      "asama_message_key": "PowerInputLost",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PSU0003",
+          "vendor_key": "PSU0003",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PSU0019",
+          "vendor_key": "PSU0019",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "thermal.threshold.critical",
+      "asama_message_key": "ThermalThresholdCritical",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.TMP0103",
+          "vendor_key": "TMP0103",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.TMP0150",
+          "vendor_key": "TMP0150",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "thermal.threshold.warning",
+      "asama_message_key": "ThermalThresholdWarning",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.TMP0102",
+          "vendor_key": "TMP0102",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "thermal.shutdown",
+      "asama_message_key": "ThermalShutdown",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.UEFI0378",
+          "vendor_key": "UEFI0378",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "fan.failure",
+      "asama_message_key": "FanFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.FAN1002",
+          "vendor_key": "FAN1002",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.FAN0033",
+          "vendor_key": "FAN0033",
+          "arg_map": [
+            1,
+            2
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "fan.redundancy.lost",
+      "asama_message_key": "FanRedundancyLost",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.RDU0002",
+          "vendor_key": "RDU0002",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.RDU0001",
+          "vendor_key": "RDU0001",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "processor.thermal.trip",
+      "asama_message_key": "ProcessorThermalTrip",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CPU0001",
+          "vendor_key": "CPU0001",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "processor.failure",
+      "asama_message_key": "ProcessorFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CPU0002",
+          "vendor_key": "CPU0002",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CPU0004",
+          "vendor_key": "CPU0004",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "memory.uncorrectable_error",
+      "asama_message_key": "MemoryUncorrectableError",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.MEM9072",
+          "vendor_key": "MEM9072",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "memory.correctable_error",
+      "asama_message_key": "MemoryCorrectableError",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.MEM0005",
+          "vendor_key": "MEM0005",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.MEM0700",
+          "vendor_key": "MEM0700",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "memory.dimm.failure",
+      "asama_message_key": "MemoryDimmFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.MEM1001",
+          "vendor_key": "MEM1001",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "storage.drive.failure",
+      "asama_message_key": "StorageDriveFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PDR1006",
+          "vendor_key": "PDR1006",
+          "arg_map": [
+            1,
+            2
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PDR120",
+          "vendor_key": "PDR120",
+          "arg_map": [
+            1,
+            2,
+            3
+          ],
+          "vendor_number_of_args": 3,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "storage.drive.predictive_failure",
+      "asama_message_key": "StorageDrivePredictiveFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PDR1002",
+          "vendor_key": "PDR1002",
+          "arg_map": [
+            1,
+            2
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "storage.array.degraded",
+      "asama_message_key": "StorageArrayDegraded",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PDR110",
+          "vendor_key": "PDR110",
+          "arg_map": [
+            1,
+            2
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PDR7",
+          "vendor_key": "PDR7",
+          "arg_map": [
+            1,
+            2
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.PDR120",
+          "vendor_key": "PDR120",
+          "arg_map": [
+            1,
+            2,
+            3
+          ],
+          "vendor_number_of_args": 3,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "storage.controller.failure",
+      "asama_message_key": "StorageControllerFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CTL221",
+          "vendor_key": "CTL221",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "network.link.down",
+      "asama_message_key": "NetworkLinkDown",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.NIC100",
+          "vendor_key": "NIC100",
+          "arg_map": [
+            1,
+            2
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "firmware.update.failed",
+      "asama_message_key": "FirmwareUpdateFailed",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.LC003",
+          "vendor_key": "LC003",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.BAR117",
+          "vendor_key": "BAR117",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "bmc.health.degraded",
+      "asama_message_key": "BmcHealthDegraded",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC9051",
+          "vendor_key": "HWC9051",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.MEM0802",
+          "vendor_key": "MEM0802",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CMC8558",
+          "vendor_key": "CMC8558",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_hints": [
+        "*restored"
+      ]
+    },
+    {
+      "asama_id": "resource.status.critical",
+      "asama_message_key": "ResourceStatusCritical",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HTR0007",
+          "vendor_key": "HTR0007",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HTR0010",
+          "vendor_key": "HTR0010",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC1208",
+          "vendor_key": "HWC1208",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC7004",
+          "vendor_key": "HWC7004",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC7010",
+          "vendor_key": "HWC7010",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC8016",
+          "vendor_key": "HWC8016",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC9002",
+          "vendor_key": "HWC9002",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC9052",
+          "vendor_key": "HWC9052",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.LCS0009",
+          "vendor_key": "LCS0009",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.SEL1514",
+          "vendor_key": "SEL1514",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.SEL1515",
+          "vendor_key": "SEL1515",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CMC8558",
+          "vendor_key": "CMC8558",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_hints": [
+        "*health is restored*"
+      ]
+    },
+    {
+      "asama_id": "resource.status.warning",
+      "asama_message_key": "ResourceStatusWarning",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HTR0006",
+          "vendor_key": "HTR0006",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC1207",
+          "vendor_key": "HWC1207",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC7002",
+          "vendor_key": "HWC7002",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC7004",
+          "vendor_key": "HWC7004",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC7008",
+          "vendor_key": "HWC7008",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        },
+        {
+          "vendor_message_id": "IDRAC.2.9.0.HWC9001",
+          "vendor_key": "HWC9001",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "eemiregistry.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "IDRAC.2.9.0.CMC8558",
+          "vendor_key": "CMC8558",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "eemiregistry.json"
+        }
+      ]
+    }
+  ]
+}

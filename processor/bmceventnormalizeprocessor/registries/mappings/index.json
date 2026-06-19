@@ -31,6 +31,20 @@
       }
     },
     {
+      "bundle_id": "dell.idrac9.7.10.70.00",
+      "vendor": "dell",
+      "bmc_family": "idrac",
+      "bmc_model": "idrac9",
+      "firmware_version": "7.10.70.00",
+      "registry_prefix": "IDRAC",
+      "registry_version": "2.9.0",
+      "path": "bundles/dell/idrac9/7.10.70.00.json",
+      "test_reference": {
+        "bmc_ip": "10.138.163.172",
+        "registry_dir": "nxtgen-test-amd-dell-10.138.163.172"
+      }
+    },
+    {
       "bundle_id": "lenovo.xcc.1.0.0",
       "vendor": "lenovo",
       "bmc_family": "xcc",
