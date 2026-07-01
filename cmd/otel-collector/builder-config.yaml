@@ -1,7 +1,7 @@
 dist:
   module: github.com/open-telemetry/opentelemetry-collector-contrib/cmd/otel-collector
   name: otel-collector
-  description: "OpenTelemetry Collector Contrib - Stage 2: OTLP Receiver with Basic Auth Extension and Batch Processor"
+  description: "OpenTelemetry Collector Contrib - Stage 2: OTLP in, logs via otlphttp, metrics via prometheusremotewrite"
   version: 0.141.0
   output_path: ./cmd/otel-collector
 
@@ -16,3 +16,4 @@ processors:
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.141.0
