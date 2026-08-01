@@ -1,0 +1,17 @@
+type: redfishlog
+
+status:
+  class: receiver
+  stability:
+    alpha: [logs]
+  distributions: [contrib]
+  codeowners:
+    active: [sri-vinay-asama]
+    seeking_new: true
+
+tests:
+  config:
+    credentials_file: testdata/credentials.yaml
+    targets:
+      - endpoint: https://127.0.0.1
+    poll_interval: 1h

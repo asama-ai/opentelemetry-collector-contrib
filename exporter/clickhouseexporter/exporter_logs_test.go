@@ -11,6 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
+func TestRenderCreateLogsTableDedup(t *testing.T) {
+	cfg := withDefaultConfig()
+	cfg.LogsDedupKeyAttribute = "redfish.entry_fingerprint"
+	sql := renderCreateLogsTableSQL(cfg)
+	require.Contains(t, sql, "DedupKey")
+	require.Contains(t, sql, "ReplacingMergeTree(Timestamp)")
+	require.Contains(t, sql, "ORDER BY (DedupKey)")
+}
+
 func TestLogsExporter_New(t *testing.T) {
 	type validate func(*testing.T, *logsExporter, error)
 

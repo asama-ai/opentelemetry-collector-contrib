@@ -5,6 +5,8 @@ package clickhouseexporter // import "github.com/open-telemetry/opentelemetry-co
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -24,6 +26,7 @@ type logsExporter struct {
 	insertSQL      string
 	schemaFeatures struct {
 		EventName bool
+		DedupKey  bool
 	}
 
 	logger *zap.Logger
@@ -63,6 +66,11 @@ func (e *logsExporter) start(ctx context.Context, _ component.Host) error {
 		return fmt.Errorf("schema detection: %w", err)
 	}
 
+	if e.cfg.LogsDedupKeyAttribute != "" && !e.schemaFeatures.DedupKey {
+		return fmt.Errorf("logs_dedup_key_attribute %q requires column %s on table %s.%s",
+			e.cfg.LogsDedupKeyAttribute, logsColumnDedupKey, e.cfg.database(), e.cfg.LogsTableName)
+	}
+
 	e.renderInsertLogsSQL()
 
 	return nil
@@ -70,6 +78,7 @@ func (e *logsExporter) start(ctx context.Context, _ component.Host) error {
 
 const (
 	logsColumnEventName = "EventName"
+	logsColumnDedupKey  = "DedupKey"
 )
 
 func (e *logsExporter) detectSchemaFeatures(ctx context.Context) error {
@@ -81,6 +90,9 @@ func (e *logsExporter) detectSchemaFeatures(ctx context.Context) error {
 	for _, name := range columnNames {
 		if name == logsColumnEventName {
 			e.schemaFeatures.EventName = true
+		}
+		if name == logsColumnDedupKey {
+			e.schemaFeatures.DedupKey = true
 		}
 	}
 
@@ -139,7 +151,30 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 					timestamp = r.ObservedTimestamp()
 				}
 
-				columnValues := make([]any, 0, 16)
+				dedupKey := ""
+				if e.schemaFeatures.DedupKey {
+					if v, ok := r.Attributes().Get(e.cfg.LogsDedupKeyAttribute); ok {
+						dedupKey = v.AsString()
+					}
+					if dedupKey == "" {
+						fallback := fmt.Sprintf("%s|%d|%s|%s|%s|%d|%s",
+							serviceName,
+							timestamp.AsTime().UnixNano(),
+							traceutil.TraceIDToHexOrEmptyString(r.TraceID()),
+							traceutil.SpanIDToHexOrEmptyString(r.SpanID()),
+							r.SeverityText(),
+							uint8(r.SeverityNumber()),
+							r.Body().AsString(),
+						)
+						sum := sha256.Sum256([]byte(fallback))
+						dedupKey = "__missing_dedup__|" + hex.EncodeToString(sum[:16])
+					}
+				}
+
+				columnValues := make([]any, 0, 18)
+				if e.schemaFeatures.DedupKey {
+					columnValues = append(columnValues, dedupKey)
+				}
 				columnValues = append(columnValues,
 					timestamp.AsTime(),
 					traceutil.TraceIDToHexOrEmptyString(r.TraceID()),
@@ -200,16 +235,34 @@ func (e *logsExporter) renderInsertLogsSQL() {
 		featureColumnPositions.WriteString(", ?")
 	}
 
-	e.insertSQL = fmt.Sprintf(sqltemplates.LogsInsert, e.cfg.database(), e.cfg.LogsTableName, featureColumnNames.String(), featureColumnPositions.String())
+	insertTmpl := sqltemplates.LogsInsert
+	if e.schemaFeatures.DedupKey {
+		insertTmpl = sqltemplates.LogsDedupInsert
+	}
+	e.insertSQL = fmt.Sprintf(insertTmpl, e.cfg.database(), e.cfg.LogsTableName, featureColumnNames.String(), featureColumnPositions.String())
 }
 
 func renderCreateLogsTableSQL(cfg *Config) string {
 	ttlExpr := internal.GenerateTTLExpr(cfg.TTL, "TimestampTime")
+	if cfg.LogsDedupKeyAttribute != "" {
+		return fmt.Sprintf(sqltemplates.LogsDedupCreateTable,
+			cfg.database(), cfg.LogsTableName, cfg.clusterString(),
+			logsDedupTableEngine(cfg),
+			ttlExpr,
+		)
+	}
 	return fmt.Sprintf(sqltemplates.LogsCreateTable,
 		cfg.database(), cfg.LogsTableName, cfg.clusterString(),
 		cfg.tableEngineString(),
 		ttlExpr,
 	)
+}
+
+func logsDedupTableEngine(cfg *Config) string {
+	if cfg.TableEngine.Name != "" && cfg.TableEngine.Name != defaultTableEngineName {
+		return cfg.tableEngineString()
+	}
+	return "ReplacingMergeTree(Timestamp)"
 }
 
 func createLogsTable(ctx context.Context, cfg *Config, db driver.Conn) error {

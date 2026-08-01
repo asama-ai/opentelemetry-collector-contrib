@@ -46,4 +46,18 @@ internal/tools/testresults/*
 
 go.work*
 
+# OpenTelemetry Collector Builder output for custom distros (only builder-config + Docker + metadata are tracked).
+/cmd/otel-collector/go.mod
+/cmd/otel-collector/go.sum
+/cmd/otel-collector/main.go
+/cmd/otel-collector/main_others.go
+/cmd/otel-collector/main_windows.go
+/cmd/otel-collector/components.go
+/cmd/otel-exporter/go.mod
+/cmd/otel-exporter/go.sum
+/cmd/otel-exporter/main.go
+/cmd/otel-exporter/main_others.go
+/cmd/otel-exporter/main_windows.go
+/cmd/otel-exporter/components.go
+
 /result

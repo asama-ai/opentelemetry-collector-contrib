@@ -1,0 +1,37 @@
+INSERT INTO %q.%q (
+    DedupKey,
+    Timestamp,
+    TraceId,
+    SpanId,
+    TraceFlags,
+    SeverityText,
+    SeverityNumber,
+    ServiceName,
+    Body,
+    ResourceSchemaUrl,
+    ResourceAttributes,
+    ScopeSchemaUrl,
+    ScopeName,
+    ScopeVersion,
+    ScopeAttributes,
+    LogAttributes
+    %s
+) VALUES (
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?,
+    ?
+    %s
+)
