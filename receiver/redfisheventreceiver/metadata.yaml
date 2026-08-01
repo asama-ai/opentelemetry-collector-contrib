@@ -1,0 +1,10 @@
+type: redfishevent
+
+status:
+  class: receiver
+  stability:
+    logs: alpha
+  distributions: []
+
+tests:
+  config:

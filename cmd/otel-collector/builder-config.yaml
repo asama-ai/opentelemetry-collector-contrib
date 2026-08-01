@@ -1,12 +1,13 @@
 dist:
   module: github.com/open-telemetry/opentelemetry-collector-contrib/cmd/otel-collector
   name: otel-collector
-  description: "OpenTelemetry Collector Contrib - Stage 2: OTLP + Redfish Log receivers, File Storage + Basic Auth extensions, Batch processor, OTLP HTTP + Prometheus remote write exporters"
+  description: "OpenTelemetry Collector Contrib - Stage 2: OTLP + Redfish Event/Log receivers, File Storage + Basic Auth extensions, Batch processor, OTLP HTTP + Prometheus remote write exporters"
   version: 0.141.0
   output_path: ./cmd/otel-collector
 
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfisheventreceiver v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfishlogreceiver v0.141.0
 
 extensions:
@@ -22,4 +23,5 @@ exporters:
 
 # Local fork modules: not published on go.opentelemetry.io / upstream contrib at this path+version.
 replaces:
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfisheventreceiver => ../../receiver/redfisheventreceiver
   - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfishlogreceiver => ../../receiver/redfishlogreceiver
