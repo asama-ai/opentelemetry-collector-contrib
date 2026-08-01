@@ -34,6 +34,24 @@ func TestConfigValidate(t *testing.T) {
 	cfg.Targets = []TargetConfig{{Endpoint: "https://h"}}
 	cfg.InitialLastN = 0
 	require.Error(t, cfg.Validate())
+
+	cfg = createDefaultConfig()
+	cfg.CredentialsFile = "/x"
+	cfg.Targets = []TargetConfig{{Endpoint: "https://h"}}
+	cfg.PollInterval = 0
+	require.Error(t, cfg.Validate())
+
+	cfg = createDefaultConfig()
+	cfg.CredentialsFile = "/x"
+	cfg.Targets = []TargetConfig{{Endpoint: "https://h"}}
+	cfg.Timeout = 0
+	require.Error(t, cfg.Validate())
+
+	cfg = createDefaultConfig()
+	cfg.CredentialsFile = "/x"
+	cfg.Targets = []TargetConfig{{Endpoint: "https://h"}}
+	cfg.LogResetClockSkew = -time.Second
+	require.Error(t, cfg.Validate())
 }
 
 func TestSelectEntriesColdStart(t *testing.T) {

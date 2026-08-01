@@ -207,7 +207,7 @@ func (r *redfishLogReceiver) collectTarget(
 				r.logger.Debug("entries", zap.String("log_service", ls.Name), zap.Error(err))
 				continue
 			}
-			ckKey := checkpointStorageKey(lookup, ls.ODataID)
+			ckKey := checkpointStorageKey(t.Endpoint, ls.ODataID)
 			var cp *checkpointState
 			if r.storageClient != nil {
 				cp, err = r.storageClient.get(ctx, ckKey)
@@ -396,19 +396,20 @@ func maxCreatedTime(entries []*redfish.LogEntry) (time.Time, bool) {
 	return maxT, ok
 }
 
-func maxNumericID(entries []*redfish.LogEntry) int64 {
-	var max int64 = -1
+func maxNumericID(entries []*redfish.LogEntry) (uint64, bool) {
+	var max uint64
+	ok := false
 	for _, e := range entries {
-		n, ok := parseNumericID(e.ID)
-		if !ok {
+		n, parsed := parseNumericID(e.ID)
+		if !parsed {
 			continue
 		}
-		v := int64(n)
-		if max < 0 || v > max {
-			max = v
+		if !ok || n > max {
+			max = n
+			ok = true
 		}
 	}
-	return max
+	return max, ok
 }
 
 func shouldResetCheckpoint(cp *checkpointState, sorted []*redfish.LogEntry, skew time.Duration) bool {
@@ -420,9 +421,9 @@ func shouldResetCheckpoint(cp *checkpointState, sorted []*redfish.LogEntry, skew
 	if okCp && okMax && tcp.After(maxT.Add(skew)) {
 		return true
 	}
-	maxN := maxNumericID(sorted)
+	maxN, maxNOK := maxNumericID(sorted)
 	cpN, cpNumOK := parseNumericID(cp.EntryID)
-	if cpNumOK && maxN >= 0 && uint64(maxN) < cpN {
+	if cpNumOK && maxNOK && maxN < cpN {
 		return true
 	}
 	return false
@@ -457,10 +458,15 @@ func logEntryAfterCheckpoint(e *redfish.LogEntry, cp *checkpointState) bool {
 	te, okE := parseRedfishTime(e.Created)
 	tcp, okC := parseRedfishTime(cp.Created)
 	if !okC {
+		if !okE {
+			return compareIDs(e.ID, cp.EntryID) > 0
+		}
 		return true
 	}
 	if !okE {
-		return true
+		// Malformed entry timestamps are not treated as newer than the checkpoint,
+		// to avoid re-emitting the same bad entries on every poll.
+		return false
 	}
 	if te.After(tcp) {
 		return true

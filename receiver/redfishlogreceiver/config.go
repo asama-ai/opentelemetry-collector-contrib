@@ -53,14 +53,17 @@ func (c *Config) Validate() error {
 	if len(c.Targets) == 0 {
 		errs = errors.Join(errs, errors.New("targets must not be empty"))
 	}
-	if c.PollInterval > 0 && c.PollInterval < time.Second {
+	if c.PollInterval < time.Second {
 		errs = errors.Join(errs, errors.New("poll_interval must be at least 1s"))
 	}
 	if c.InitialLastN < 1 {
 		errs = errors.Join(errs, errors.New("initial_last_n must be at least 1"))
 	}
-	if c.Timeout > 0 && c.Timeout < time.Second {
-		errs = errors.Join(errs, errors.New("timeout must be at least 1s when set"))
+	if c.Timeout < time.Second {
+		errs = errors.Join(errs, errors.New("timeout must be at least 1s"))
+	}
+	if c.LogResetClockSkew < 0 {
+		errs = errors.Join(errs, errors.New("log_reset_clock_skew must be non-negative"))
 	}
 	for i, t := range c.Targets {
 		if t.Endpoint == "" {

@@ -5,6 +5,8 @@ package clickhouseexporter // import "github.com/open-telemetry/opentelemetry-co
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -155,7 +157,17 @@ func (e *logsExporter) pushLogsData(ctx context.Context, ld plog.Logs) error {
 						dedupKey = v.AsString()
 					}
 					if dedupKey == "" {
-						dedupKey = fmt.Sprintf("__missing_dedup__|%s|%d|%s", serviceName, timestamp.AsTime().UnixNano(), r.Body().AsString())
+						fallback := fmt.Sprintf("%s|%d|%s|%s|%s|%d|%s",
+							serviceName,
+							timestamp.AsTime().UnixNano(),
+							traceutil.TraceIDToHexOrEmptyString(r.TraceID()),
+							traceutil.SpanIDToHexOrEmptyString(r.SpanID()),
+							r.SeverityText(),
+							uint8(r.SeverityNumber()),
+							r.Body().AsString(),
+						)
+						sum := sha256.Sum256([]byte(fallback))
+						dedupKey = "__missing_dedup__|" + hex.EncodeToString(sum[:16])
 					}
 				}
 
