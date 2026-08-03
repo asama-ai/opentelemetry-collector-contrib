@@ -30,7 +30,7 @@ type Config struct {
 func createDefaultConfig() component.Config {
 	return &Config{
 		StatePath:      configfile.DefaultStatePath,
-		PollInterval:   60 * time.Second,
+		PollInterval:   time.Hour,
 		MaxKeysPerFile: configfile.DefaultMaxKeysPerFile,
 		ExcludeKeys:    configfile.DefaultExcludeKeyGlobs,
 	}

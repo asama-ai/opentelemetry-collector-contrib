@@ -24,7 +24,7 @@ var (
 )
 
 const (
-	DefaultMaxKeysPerFile = 500
+	DefaultMaxKeysPerFile = 1000
 	MaxConfigFileBytes    = 1 << 20 // 1 MiB per-file read cap
 )
 
