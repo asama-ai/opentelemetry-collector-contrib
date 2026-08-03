@@ -8,11 +8,10 @@ type FileEntry struct {
 
 // PollerConfig groups runtime settings for the configfile receiver poller.
 type PollerConfig struct {
-	Files              []FileEntry
-	ExcludeKeys        []string
-	MaxKeysPerFile     int
-	PollIntervalSecond int
-	StatePath          string
+	Files          []FileEntry
+	ExcludeKeys    []string
+	MaxKeysPerFile int
+	StatePath      string
 }
 
 func (c PollerConfig) options() Options {

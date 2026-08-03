@@ -1,6 +1,7 @@
 package configfile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,35 @@ func TestChecksumStableAndRedaction(t *testing.T) {
 	}
 }
 
+func TestParseFileRejectsTooManyKeys(t *testing.T) {
+	dir := t.TempDir()
+	var b strings.Builder
+	for i := 0; i < 3; i++ {
+		b.WriteString("key")
+		b.WriteString(string(rune('a' + i)))
+		b.WriteString(": v\n")
+	}
+	path := writeFixture(t, dir, "many.yaml", b.String())
+
+	_, _, err := ParseFile(path, "yaml", Options{MaxKeysPerFile: 2})
+	if !errors.Is(err, ErrTooManyKeys) {
+		t.Fatalf("expected ErrTooManyKeys, got %v", err)
+	}
+}
+
+func TestReadFileRejectsOversize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "big.conf")
+	data := make([]byte, MaxConfigFileBytes+1)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ReadFile(path)
+	if !errors.Is(err, ErrFileTooLarge) {
+		t.Fatalf("expected ErrFileTooLarge, got %v", err)
+	}
+}
+
 func TestProcessEntrySkipsUnchangedChecksum(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFixture(t, dir, "sshd_config", "Port 22\n")
@@ -79,14 +109,15 @@ func TestProcessEntrySkipsUnchangedChecksum(t *testing.T) {
 	st := &State{Files: make(map[string]FileState)}
 	entry := FileEntry{Path: path}
 
-	snap1, emit1, err := ProcessEntry(entry, st, opts, true)
-	if err != nil || !emit1 || snap1 == nil {
-		t.Fatalf("first run: snap=%v emit=%v err=%v", snap1, emit1, err)
+	snap1, pending1, err := ProcessEntry(entry, st, opts, true)
+	if err != nil || snap1 == nil || pending1 == nil {
+		t.Fatalf("first run: snap=%v pending=%v err=%v", snap1, pending1, err)
 	}
+	ApplyPending(st, []PendingUpdate{*pending1})
 
-	snap2, emit2, err := ProcessEntry(entry, st, opts, false)
-	if err != nil || emit2 || snap2 != nil {
-		t.Fatalf("second run should skip: snap=%v emit=%v err=%v", snap2, emit2, err)
+	snap2, pending2, err := ProcessEntry(entry, st, opts, false)
+	if err != nil || pending2 != nil || snap2 != nil {
+		t.Fatalf("second run should skip: snap=%v pending=%v err=%v", snap2, pending2, err)
 	}
 
 	info, _ := os.Stat(path)
@@ -94,9 +125,29 @@ func TestProcessEntrySkipsUnchangedChecksum(t *testing.T) {
 	if err := os.Chtimes(path, past, past); err != nil {
 		t.Fatal(err)
 	}
-	snap3, emit3, err := ProcessEntry(entry, st, opts, false)
-	if err != nil || emit3 || snap3 != nil {
-		t.Fatalf("touch same content should skip emit: snap=%v emit=%v err=%v", snap3, emit3, err)
+	snap3, pending3, err := ProcessEntry(entry, st, opts, false)
+	if err != nil || pending3 != nil || snap3 != nil {
+		t.Fatalf("touch same content should skip emit: snap=%v pending=%v err=%v", snap3, pending3, err)
+	}
+}
+
+func TestProcessEntryPendingNotAppliedUntilCaller(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFixture(t, dir, "sshd_config", "Port 22\n")
+	opts := Options{MaxKeysPerFile: 500}
+	st := &State{Files: make(map[string]FileState)}
+	entry := FileEntry{Path: path}
+
+	snap, pending, err := ProcessEntry(entry, st, opts, true)
+	if err != nil || snap == nil || pending == nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.Files[path]; ok {
+		t.Fatal("state must not be updated before ApplyPending")
+	}
+	ApplyPending(st, []PendingUpdate{*pending})
+	if st.Files[path].Checksum == "" {
+		t.Fatal("expected checksum in state after ApplyPending")
 	}
 }
 

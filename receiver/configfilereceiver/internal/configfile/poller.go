@@ -1,27 +1,34 @@
 package configfile
 
 import (
-	"log/slog"
+	"errors"
 	"os"
+
+	"go.uber.org/zap"
 )
 
-const defaultPollIntervalSeconds = 60
+// PollResult holds snapshots to emit and state updates to apply after delivery.
+type PollResult struct {
+	Snapshots []*Snapshot
+	Pending   []PendingUpdate
+}
 
 // Poller watches configured files and yields snapshots when content changes.
 type Poller struct {
-	cfg   PollerConfig
-	state *State
+	cfg    PollerConfig
+	state  *State
+	logger *zap.Logger
 }
 
 // NewPoller builds a poller from settings.
-func NewPoller(cfg PollerConfig) *Poller {
-	if cfg.PollIntervalSecond <= 0 {
-		cfg.PollIntervalSecond = defaultPollIntervalSeconds
-	}
+func NewPoller(cfg PollerConfig, logger *zap.Logger) *Poller {
 	if cfg.StatePath == "" {
 		cfg.StatePath = DefaultStatePath
 	}
-	return &Poller{cfg: cfg}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	return &Poller{cfg: cfg, logger: logger}
 }
 
 // LoadState reads persisted mtime/checksum state from disk.
@@ -39,10 +46,15 @@ func (p *Poller) SaveState() error {
 	return SaveState(p.cfg.StatePath, p.state)
 }
 
-// Poll processes all configured files and returns snapshots that should be emitted.
-func (p *Poller) Poll(firstRun bool) []*Snapshot {
+// ApplyPending commits state after successful log delivery.
+func (p *Poller) ApplyPending(updates []PendingUpdate) {
+	ApplyPending(p.state, updates)
+}
+
+// Poll processes all configured files.
+func (p *Poller) Poll(firstRun bool) PollResult {
 	opts := p.cfg.options()
-	var snaps []*Snapshot
+	var result PollResult
 
 	for _, entry := range p.cfg.Files {
 		if entry.Path == "" {
@@ -50,27 +62,32 @@ func (p *Poller) Poll(firstRun bool) []*Snapshot {
 		}
 		if _, err := os.Stat(entry.Path); err != nil {
 			if os.IsNotExist(err) {
-				slog.Debug("configfile: file missing", "path", entry.Path)
+				p.logger.Debug("configfile: file missing", zap.String("path", entry.Path))
 				continue
 			}
-			slog.Warn("configfile: stat failed", "path", entry.Path, "err", err)
+			p.logger.Warn("configfile: stat failed", zap.String("path", entry.Path), zap.Error(err))
 			continue
 		}
 
-		snap, emit, err := ProcessEntry(entry, p.state, opts, firstRun)
+		snap, pending, err := ProcessEntry(entry, p.state, opts, firstRun)
 		if err != nil {
-			slog.Warn("configfile: process failed", "path", entry.Path, "err", err)
+			if errors.Is(err, ErrFileTooLarge) || errors.Is(err, ErrTooManyKeys) {
+				p.logger.Warn("configfile: skipping file", zap.String("path", entry.Path), zap.Error(err))
+				continue
+			}
+			p.logger.Warn("configfile: process failed", zap.String("path", entry.Path), zap.Error(err))
 			continue
 		}
-		if emit && snap != nil {
-			snaps = append(snaps, snap)
-			slog.Info("configfile: snapshot",
-				"path", snap.File,
-				"event", snap.Event,
-				"keys", snap.KeysTotal,
-				"checksum", snap.Checksum,
+		if snap != nil && pending != nil {
+			result.Snapshots = append(result.Snapshots, snap)
+			result.Pending = append(result.Pending, *pending)
+			p.logger.Info("configfile: snapshot",
+				zap.String("path", snap.File),
+				zap.String("event", snap.Event),
+				zap.Int("keys", snap.KeysTotal),
+				zap.String("checksum", snap.Checksum),
 			)
 		}
 	}
-	return snaps
+	return result
 }

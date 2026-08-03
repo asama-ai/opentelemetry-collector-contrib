@@ -41,7 +41,7 @@ func LoadState(path string) (*State, error) {
 
 // SaveState writes state atomically.
 func SaveState(path string, st *State) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(st, "", "  ")
@@ -49,7 +49,7 @@ func SaveState(path string, st *State) error {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

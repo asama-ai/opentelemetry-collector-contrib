@@ -20,6 +20,12 @@ const (
 	EventChanged = "changed"
 )
 
+// PendingUpdate holds state to commit after downstream delivery succeeds.
+type PendingUpdate struct {
+	Path  string
+	State FileState
+}
+
 // BuildSnapshot parses path and returns a snapshot without comparing state.
 func BuildSnapshot(path, format string, opts Options, event string) (*Snapshot, error) {
 	resolved, keys, err := ParseFile(path, format, opts)
@@ -36,16 +42,17 @@ func BuildSnapshot(path, format string, opts Options, event string) (*Snapshot, 
 	}, nil
 }
 
-// ProcessEntry evaluates one configured file against state. Returns snapshot when
-// a log should be emitted, or nil when unchanged.
-func ProcessEntry(entry FileEntry, st *State, opts Options, firstRun bool) (*Snapshot, bool, error) {
+// ProcessEntry evaluates one configured file against state. Returns a snapshot and
+// a pending state update when a log should be emitted; the caller must apply the
+// pending update only after successful downstream delivery.
+func ProcessEntry(entry FileEntry, st *State, opts Options, firstRun bool) (*Snapshot, *PendingUpdate, error) {
 	if entry.Path == "" {
-		return nil, false, nil
+		return nil, nil, nil
 	}
 
 	info, err := os.Stat(entry.Path)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 
 	prev, hasPrev := st.Files[entry.Path]
@@ -53,12 +60,12 @@ func ProcessEntry(entry FileEntry, st *State, opts Options, firstRun bool) (*Sna
 	size := info.Size()
 
 	if hasPrev && prev.MtimeNS == mtimeNS && prev.Size == size {
-		return nil, false, nil
+		return nil, nil, nil
 	}
 
 	snap, err := BuildSnapshot(entry.Path, entry.Format, opts, EventChanged)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 	if firstRun || !hasPrev {
 		snap.Event = EventInitial
@@ -70,13 +77,22 @@ func ProcessEntry(entry FileEntry, st *State, opts Options, firstRun bool) (*Sna
 			Size:     size,
 			Checksum: prev.Checksum,
 		}
-		return nil, false, nil
+		return nil, nil, nil
 	}
 
-	st.Files[entry.Path] = FileState{
-		MtimeNS:  mtimeNS,
-		Size:     size,
-		Checksum: snap.Checksum,
+	return snap, &PendingUpdate{
+		Path: entry.Path,
+		State: FileState{
+			MtimeNS:  mtimeNS,
+			Size:     size,
+			Checksum: snap.Checksum,
+		},
+	}, nil
+}
+
+// ApplyPending merges delivered snapshot state into st.
+func ApplyPending(st *State, updates []PendingUpdate) {
+	for _, u := range updates {
+		st.Files[u.Path] = u.State
 	}
-	return snap, true, nil
 }

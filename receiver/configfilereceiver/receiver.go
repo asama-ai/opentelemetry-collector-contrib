@@ -27,6 +27,7 @@ type configfileReceiver struct {
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 func newLogsReceiver(
@@ -52,7 +53,11 @@ func (r *configfileReceiver) Start(ctx context.Context, _ component.Host) error 
 	r.cancel = cancel
 	r.mu.Unlock()
 
-	go r.run(ctx)
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+		r.run(ctx)
+	}()
 	return nil
 }
 
@@ -64,19 +69,21 @@ func (r *configfileReceiver) Shutdown(context.Context) error {
 	if cancel != nil {
 		cancel()
 	}
+	r.wg.Wait()
 	return nil
 }
 
 func (r *configfileReceiver) run(ctx context.Context) {
-	poller := configfile.NewPoller(r.cfg.pollerConfig())
+	poller := configfile.NewPoller(r.cfg.pollerConfig(), r.logger)
 	if err := poller.LoadState(); err != nil {
 		r.logger.Error("configfile receiver: load state failed", zap.Error(err))
 		return
 	}
 
-	r.emit(ctx, poller, true)
-	if err := poller.SaveState(); err != nil {
-		r.logger.Error("configfile receiver: save state failed", zap.Error(err))
+	if r.emit(ctx, poller, true) {
+		if err := poller.SaveState(); err != nil {
+			r.logger.Error("configfile receiver: save state failed", zap.Error(err))
+		}
 	}
 
 	ticker := time.NewTicker(r.cfg.PollInterval)
@@ -87,23 +94,28 @@ func (r *configfileReceiver) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			r.emit(ctx, poller, false)
-			if err := poller.SaveState(); err != nil {
-				r.logger.Error("configfile receiver: save state failed", zap.Error(err))
+			if r.emit(ctx, poller, false) {
+				if err := poller.SaveState(); err != nil {
+					r.logger.Error("configfile receiver: save state failed", zap.Error(err))
+				}
 			}
 		}
 	}
 }
 
-func (r *configfileReceiver) emit(ctx context.Context, poller *configfile.Poller, firstRun bool) {
-	snaps := poller.Poll(firstRun)
-	if len(snaps) == 0 {
-		return
+// emit returns true when pending state was committed and should be persisted.
+func (r *configfileReceiver) emit(ctx context.Context, poller *configfile.Poller, firstRun bool) bool {
+	result := poller.Poll(firstRun)
+	if len(result.Snapshots) == 0 {
+		return false
 	}
-	ld := configfile.SnapshotsToLogs(snaps)
+	ld := configfile.SnapshotsToLogs(result.Snapshots)
 	if err := r.consumer.ConsumeLogs(ctx, ld); err != nil {
 		r.logger.Warn("configfile receiver: consume logs failed", zap.Error(err))
+		return false
 	}
+	poller.ApplyPending(result.Pending)
+	return true
 }
 
 var _ receiver.Logs = (*configfileReceiver)(nil)

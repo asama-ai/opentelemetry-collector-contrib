@@ -3,15 +3,24 @@ package configfile
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	// ErrFileTooLarge is returned when a file exceeds MaxConfigFileBytes.
+	ErrFileTooLarge = errors.New("config file exceeds max size")
+	// ErrTooManyKeys is returned when filtered keys exceed MaxKeysPerFile.
+	ErrTooManyKeys = errors.New("config file exceeds max keys")
 )
 
 const (
@@ -53,7 +62,7 @@ func (o Options) excludeGlobs() []string {
 	return o.ExcludeKeys
 }
 
-// ReadFile reads up to MaxConfigFileBytes from path.
+// ReadFile reads a config file; returns ErrFileTooLarge when over MaxConfigFileBytes.
 func ReadFile(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -67,7 +76,7 @@ func ReadFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	if len(data) > MaxConfigFileBytes {
-		return data[:MaxConfigFileBytes], nil
+		return nil, fmt.Errorf("%w (%d bytes, limit %d)", ErrFileTooLarge, len(data), MaxConfigFileBytes)
 	}
 	return data, nil
 }
@@ -108,12 +117,18 @@ func ParseFile(path, format string, opts Options) (resolvedFormat string, pairs 
 	if err != nil {
 		return resolvedFormat, nil, err
 	}
-	return resolvedFormat, filterPairs(raw, opts), nil
+	pairs, ferr := filterPairs(raw, opts)
+	if ferr != nil {
+		return resolvedFormat, nil, ferr
+	}
+	return resolvedFormat, pairs, nil
 }
 
-func filterPairs(raw []Pair, opts Options) map[string]string {
+func filterPairs(raw []Pair, opts Options) (map[string]string, error) {
 	exclude := opts.excludeGlobs()
 	maxKeys := opts.maxKeys()
+	sort.Slice(raw, func(i, j int) bool { return raw[i].Key < raw[j].Key })
+
 	seen := make(map[string]struct{})
 	out := make(map[string]string)
 
@@ -129,11 +144,11 @@ func filterPairs(raw []Pair, opts Options) map[string]string {
 		}
 		seen[pair.Key] = struct{}{}
 		if len(out) >= maxKeys {
-			break
+			return nil, fmt.Errorf("%w (limit %d)", ErrTooManyKeys, maxKeys)
 		}
 		out[pair.Key] = StringifyValue(pair.Value)
 	}
-	return out
+	return out, nil
 }
 
 func parseConfigFile(format string, data []byte) ([]Pair, error) {
