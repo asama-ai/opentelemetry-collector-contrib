@@ -24,7 +24,7 @@ func TestProcessLogsWrittenAppendsSnapshot(t *testing.T) {
 	}
 
 	ld := actorLogs(path, configfilereceiver.ActorEventWritten)
-	out, err := newSnapshotProcessor(zap.NewNop(), createDefaultConfig().(*Config)).processLogs(context.Background(), ld)
+	out, err := newSnapshotProcessor(zap.NewNop(), snapCfg(path)).processLogs(context.Background(), ld)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestProcessLogsReplacedAppendsSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	ld := actorLogs(path, configfilereceiver.ActorEventReplaced)
-	out, err := newSnapshotProcessor(zap.NewNop(), createDefaultConfig().(*Config)).processLogs(context.Background(), ld)
+	out, err := newSnapshotProcessor(zap.NewNop(), snapCfg(path)).processLogs(context.Background(), ld)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestProcessLogsReplacedAppendsSnapshot(t *testing.T) {
 
 func TestProcessLogsDeletedNoSnapshot(t *testing.T) {
 	ld := actorLogs("/no/such.yaml", configfilereceiver.ActorEventDeleted)
-	out, err := newSnapshotProcessor(zap.NewNop(), createDefaultConfig().(*Config)).processLogs(context.Background(), ld)
+	out, err := newSnapshotProcessor(zap.NewNop(), snapCfg("/no/such.yaml")).processLogs(context.Background(), ld)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +94,9 @@ func TestProcessLogsDeletedNoSnapshot(t *testing.T) {
 }
 
 func TestProcessLogsMissingFileKeepsActor(t *testing.T) {
-	ld := actorLogs(filepath.Join(t.TempDir(), "gone.yaml"), configfilereceiver.ActorEventWritten)
-	out, err := newSnapshotProcessor(zap.NewNop(), createDefaultConfig().(*Config)).processLogs(context.Background(), ld)
+	path := filepath.Join(t.TempDir(), "gone.yaml")
+	ld := actorLogs(path, configfilereceiver.ActorEventWritten)
+	out, err := newSnapshotProcessor(zap.NewNop(), snapCfg(path)).processLogs(context.Background(), ld)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,10 +106,48 @@ func TestProcessLogsMissingFileKeepsActor(t *testing.T) {
 	}
 }
 
+func TestProcessLogsUnlistedPathNoSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "watched.yaml")
+	if err := os.WriteFile(path, []byte("a: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ld := actorLogs(path, configfilereceiver.ActorEventWritten)
+	out, err := newSnapshotProcessor(zap.NewNop(), snapCfg(filepath.Join(dir, "other.yaml"))).processLogs(context.Background(), ld)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len() != 1 {
+		t.Fatal("unlisted path must not be read")
+	}
+}
+
+func TestProcessLogsEmptyAllowlistNoSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "watched.yaml")
+	if err := os.WriteFile(path, []byte("a: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ld := actorLogs(path, configfilereceiver.ActorEventWritten)
+	out, err := newSnapshotProcessor(zap.NewNop(), createDefaultConfig().(*Config)).processLogs(context.Background(), ld)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len() != 1 {
+		t.Fatal("empty files allowlist must not read")
+	}
+}
+
 func TestFactoryType(t *testing.T) {
 	if got := NewFactory().Type().String(); got != typeStr {
 		t.Fatalf("type=%q", got)
 	}
+}
+
+func snapCfg(files ...string) *Config {
+	cfg := createDefaultConfig().(*Config)
+	cfg.Files = files
+	return cfg
 }
 
 func actorLogs(path, event string) plog.Logs {

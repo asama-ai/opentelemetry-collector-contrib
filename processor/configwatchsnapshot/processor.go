@@ -5,6 +5,7 @@ package configwatchsnapshot // import "github.com/open-telemetry/opentelemetry-c
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,7 +36,7 @@ func appendSnapshots(sl plog.ScopeLogs, cfg *Config, logger *zap.Logger) {
 			continue
 		}
 		path := attrStr(lr.Attributes(), "config.file")
-		if path == "" {
+		if !allowedPath(path, cfg.Files) {
 			continue
 		}
 		snap, err := configfilereceiver.BuildChangedSnapshot(path, cfg.MaxKeysPerFile, cfg.ExcludeKeys)
@@ -64,6 +65,22 @@ func appendSnapshots(sl plog.ScopeLogs, cfg *Config, logger *zap.Logger) {
 	for k := 0; k < extra.Len(); k++ {
 		extra.At(k).CopyTo(records.AppendEmpty())
 	}
+}
+
+func allowedPath(path string, files []string) bool {
+	if path == "" || len(files) == 0 {
+		return false
+	}
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) {
+		return false
+	}
+	for _, f := range files {
+		if filepath.Clean(f) == clean {
+			return true
+		}
+	}
+	return false
 }
 
 func attrStr(attrs pcommon.Map, key string) string {

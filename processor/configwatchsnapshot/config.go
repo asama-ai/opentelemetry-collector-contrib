@@ -11,6 +11,9 @@ import (
 
 // Config controls snapshot flatten/redaction for actor-triggered reads.
 type Config struct {
+	// Files is the allowlist of absolute paths this processor may read.
+	// Empty means no snapshots (fail closed). Must match ConfigWatch / configfile receiver lists.
+	Files          []string `mapstructure:"files"`
 	MaxKeysPerFile int      `mapstructure:"max_keys_per_file"`
 	ExcludeKeys    []string `mapstructure:"exclude_keys"`
 }
