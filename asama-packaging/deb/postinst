@@ -12,9 +12,9 @@ if ! getent passwd asama-agent >/dev/null; then
         asama-agent
 fi
 
-mkdir -p /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs
-chown asama-agent:asama-agent /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs
-chmod 750 /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs
+mkdir -p /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs /opt/asama.ai/cache
+chown asama-agent:asama-agent /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs /opt/asama.ai/cache
+chmod 750 /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs /opt/asama.ai/cache
 chown asama-agent:asama-agent /opt/asama.ai/bin/otelcontribcol-otel-collector
 chmod 750 /opt/asama.ai/bin/otelcontribcol-otel-collector
 chown asama-agent:asama-agent /opt/asama.ai/config/otel-collector-config.yaml

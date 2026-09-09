@@ -121,14 +121,6 @@ jobs:
           (cd ~/rpmbuild/SPECS && rpmbuild -ba asama-otel-collector.spec)
           rpm -qlp ~/rpmbuild/RPMS/x86_64/asama-otel-collector-${RPM_VERSION}-${RPM_RELEASE}*.x86_64.rpm
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: asama-otel-collector-packages
-          path: |
-            deb/asama-otel-collector_${{ env.DEB_VERSION }}-1_amd64.deb
-            /home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector-${{ env.RPM_VERSION }}-${{ env.RPM_RELEASE }}*.x86_64.rpm
-
       - name: Configure RPM signing
         env:
           RPM_GPG_PRIVATE_KEY: ${{ secrets.RPM_GPG_PRIVATE_KEY || secrets.GPG_PRIVATE_KEY }}
@@ -142,27 +134,37 @@ jobs:
           find ~/rpmbuild/RPMS -name '*.rpm' -print0 | xargs -0 -r -n1 rpmsign --addsign
           find ~/rpmbuild/RPMS -name '*.rpm' -print0 | xargs -0 -r -n1 sudo rpm --checksig
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: asama-otel-collector-packages
+          path: |
+            deb/asama-otel-collector_${{ env.DEB_VERSION }}-1_amd64.deb
+            /home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector-${{ env.RPM_VERSION }}-${{ env.RPM_RELEASE }}*.x86_64.rpm
+
       - name: Install and configure Pulp CLI
         env:
           PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
           PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
           PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
         run: |
-          if [ -z "${PULP_BASE_URL:-}" ]; then
-            echo "PULP_BASE_URL unset on this repo; skip Pulp"
+          if [ -z "${PULP_BASE_URL:-}" ] || [ -z "${PULP_USERNAME:-}" ] || [ -z "${PULP_PASSWORD:-}" ]; then
+            echo "Pulp credentials incomplete; skip Pulp"
             exit 0
           fi
           # RPM CLI lives in pulp-cli; pulp-cli-rpm is not published on PyPI.
-          python3 -m pip install --user pulp-cli==0.40.6 pulp-cli-deb
+          python3 -m pip install --user pulp-cli==0.40.6 pulp-cli-deb tomli-w
           asama-packaging/scripts/configure-pulp-cli.sh
 
       - name: Upload and publish packages in Pulp
         env:
           PULP_DEB_SIGNING_SERVICE: ${{ secrets.PULP_DEB_SIGNING_SERVICE || 'asama-deb-signer' }}
           PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
+          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
+          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
         run: |
-          if [ -z "${PULP_BASE_URL:-}" ]; then
-            echo "PULP_BASE_URL unset; skip Pulp upload"
+          if [ -z "${PULP_BASE_URL:-}" ] || [ -z "${PULP_USERNAME:-}" ] || [ -z "${PULP_PASSWORD:-}" ]; then
+            echo "Pulp credentials incomplete; skip Pulp upload"
             exit 0
           fi
           asama-packaging/scripts/pulp-asama.sh deb content upload --repository "$DEB_REPOSITORY" --file "deb/asama-otel-collector_${DEB_VERSION}-1_amd64.deb"
@@ -172,7 +174,6 @@ jobs:
 
       - name: Attach artifacts to the GitHub release
         if: startsWith(github.ref, 'refs/tags/')
-        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           files: |

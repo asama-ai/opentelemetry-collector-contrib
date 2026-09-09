@@ -1,6 +1,7 @@
 %define _bindir /opt/asama.ai/bin
 %define _configdir /opt/asama.ai/config
 %define _logdir /opt/asama.ai/logs
+%define _cachedir /opt/asama.ai/cache
 %define _servicedir /etc/systemd/system
 %define debug_package %{nil}
 %define _binary_payload w2.xzdio
@@ -17,6 +18,7 @@ Source2:        asama-otel-collector.service
 
 Requires:       systemd
 Requires:       asama-host-agent
+Requires(pre):  shadow-utils
 
 %description
 OpenTelemetry Collector package for Asama AI monitoring stack
@@ -28,6 +30,7 @@ OpenTelemetry Collector package for Asama AI monitoring stack
 mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_configdir}
 mkdir -p %{buildroot}%{_logdir}
+mkdir -p %{buildroot}%{_cachedir}
 mkdir -p %{buildroot}%{_servicedir}
 
 install -p -m 750 %{SOURCE0} %{buildroot}%{_bindir}/otelcontribcol-otel-collector
@@ -40,6 +43,7 @@ install -p -m 640 %{SOURCE2} %{buildroot}%{_servicedir}/asama-otel-collector.ser
 %dir %attr(750,asama-agent,asama-agent) %{_bindir}
 %dir %attr(750,asama-agent,asama-agent) %{_configdir}
 %dir %attr(750,asama-agent,asama-agent) %{_logdir}
+%dir %attr(750,asama-agent,asama-agent) %{_cachedir}
 %attr(750,asama-agent,asama-agent) %{_bindir}/otelcontribcol-otel-collector
 %config(noreplace) %attr(640,asama-agent,asama-agent) %{_configdir}/otel-collector-config.yaml
 %attr(644,root,root) %{_servicedir}/asama-otel-collector.service
@@ -60,10 +64,13 @@ fi
 set -e
 mkdir -p %{_configdir} || echo "ERROR: Failed to create config dir"
 mkdir -p %{_logdir} || echo "ERROR: Failed to create log dir"
-chown -R asama-agent:asama-agent %{_configdir}
-chown -R asama-agent:asama-agent %{_logdir}
-chmod 750 %{_configdir}
-chmod 750 %{_logdir}
+mkdir -p %{_cachedir} || echo "ERROR: Failed to create cache dir"
+chown -R asama-agent:asama-agent %{_configdir} || echo "ERROR: Failed to chown config dir"
+chown -R asama-agent:asama-agent %{_logdir} || echo "ERROR: Failed to chown log dir"
+chown -R asama-agent:asama-agent %{_cachedir} || echo "ERROR: Failed to chown cache dir"
+chmod 750 %{_configdir} || echo "ERROR: Failed to chmod config dir"
+chmod 750 %{_logdir} || echo "ERROR: Failed to chmod log dir"
+chmod 750 %{_cachedir} || echo "ERROR: Failed to chmod cache dir"
 
 if [ ! -f %{_configdir}/host-agent.env ]; then
     install -o asama-agent -g asama-agent -m 640 /dev/null %{_configdir}/host-agent.env

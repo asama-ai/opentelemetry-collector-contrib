@@ -48,11 +48,13 @@ cfg_home="${HOME}/.config/pulp/cli.toml"
 
 # Bare `format = json` is invalid TOML; pulp-cli then uses default api_root=/pulp/
 # and Console Dex-redirects /pulp/api/v3/status/.
-python3 - "$cfg_home" "$click_cfg" "$base_url" "$api_root" "$PULP_USERNAME" "$PULP_PASSWORD" "$verify_ssl" << 'PY'
+python3 - "$cfg_home" "$click_cfg" "$base_url" "$api_root" "$PULP_USERNAME" "$verify_ssl" << 'PY'
+import os
 import sys
 from pathlib import Path
 
-cfg_home, click_cfg, base_url, api_root, username, password, verify_ssl = sys.argv[1:]
+cfg_home, click_cfg, base_url, api_root, username, verify_ssl = sys.argv[1:]
+password = os.environ["PULP_PASSWORD"]
 try:
     import tomli_w
 except ImportError:
@@ -74,6 +76,9 @@ if tomli_w is None:
 for path in {cfg_home, click_cfg}:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    p.parent.chmod(0o700)
+    p.touch(mode=0o600, exist_ok=True)
+    p.chmod(0o600)
     p.write_bytes(tomli_w.dumps(doc).encode())
     print(f"Wrote {p}")
 PY
