@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Debian-style version without v, e.g. 0.141.0-asama.001"
+        description: "Without v: 0.141.0-asama-test-001 (testing Pulp) or 0.141.0-asama-001 (production Pulp)"
         required: true
 
 permissions:
@@ -40,25 +40,34 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             raw="${tag#v}"
           fi
-          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama[-.]([0-9]+)$ ]]; then
+          # Match -asama-test- before -asama- so "test" is a channel, not a build number.
+          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-test[-.]([0-9]+)$ ]]; then
             upstream="${BASH_REMATCH[1]}"
             asama_n="${BASH_REMATCH[2]}"
+            channel=test
+          elif [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama[-.]([0-9]+)$ ]]; then
+            upstream="${BASH_REMATCH[1]}"
+            asama_n="${BASH_REMATCH[2]}"
+            channel=prod
           else
-            echo "ERROR: version '$raw' must be X.Y.Z-asama-N or X.Y.Z-asama.N (git tag vX.Y.Z-asama-001)"
+            echo "ERROR: version '$raw' must be X.Y.Z-asama-test-N (testing) or X.Y.Z-asama-N (production)"
+            echo "example git tags: v0.141.0-asama-test-001  v0.141.0-asama-001"
             exit 1
           fi
           # Debian: one hyphen (upstream - revision). RPM Version cannot contain '-'.
-          echo "DEB_VERSION=${upstream}-asama.${asama_n}" >> "$GITHUB_ENV"
-          echo "RPM_VERSION=${upstream}" >> "$GITHUB_ENV"
-          echo "RPM_RELEASE=asama.${asama_n}" >> "$GITHUB_ENV"
-          echo "PKG_STEM=${upstream}-asama.${asama_n}" >> "$GITHUB_ENV"
-          if [[ "$asama_n" == *test* ]] || [[ "$tag" == *test* ]]; then
+          if [ "$channel" = test ]; then
+            rev="asama.test.${asama_n}"
             echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
             echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
           else
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
+            rev="asama.${asama_n}"
+            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }}" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}" >> "$GITHUB_ENV"
           fi
+          echo "DEB_VERSION=${upstream}-${rev}" >> "$GITHUB_ENV"
+          echo "RPM_VERSION=${upstream}" >> "$GITHUB_ENV"
+          echo "RPM_RELEASE=${rev}" >> "$GITHUB_ENV"
+          echo "PKG_STEM=${upstream}-${rev}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-go@v5
         with:
@@ -118,7 +127,6 @@ jobs:
             /home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector-${{ env.RPM_VERSION }}-${{ env.RPM_RELEASE }}*.x86_64.rpm
 
       - name: Configure RPM signing
-        continue-on-error: true
         env:
           RPM_GPG_PRIVATE_KEY: ${{ secrets.RPM_GPG_PRIVATE_KEY || secrets.GPG_PRIVATE_KEY }}
           RPM_GPG_NAME: ${{ secrets.RPM_GPG_NAME || secrets.GPG_NAME }}
@@ -132,8 +140,6 @@ jobs:
           find ~/rpmbuild/RPMS -name '*.rpm' -print0 | xargs -0 -r -n1 sudo rpm --checksig
 
       - name: Install and configure Pulp CLI
-        continue-on-error: true
-        id: pulp_cli
         env:
           PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
           PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
@@ -147,7 +153,6 @@ jobs:
           asama-packaging/scripts/configure-pulp-cli.sh
 
       - name: Upload and publish packages in Pulp
-        continue-on-error: true
         env:
           PULP_DEB_SIGNING_SERVICE: ${{ secrets.PULP_DEB_SIGNING_SERVICE || 'asama-deb-signer' }}
           PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
