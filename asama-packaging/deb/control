@@ -1,0 +1,12 @@
+Package: asama-otel-collector
+Version: _VERSION_
+Section: base
+Priority: optional
+Architecture: amd64
+Depends: systemd, asama-host-agent
+# Combined host-agent packages through 1.x owned these files; take them over.
+Breaks: asama-host-agent (<< 2.0.0)
+Replaces: asama-host-agent (<< 2.0.0)
+Maintainer: Asama AI
+Description: Asama AI OpenTelemetry Collector
+ Local OTLP ingest and export for Asama Host Agent.

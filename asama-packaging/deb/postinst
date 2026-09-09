@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+
+if ! getent group asama-agent >/dev/null; then
+    groupadd --system asama-agent
+fi
+if ! getent passwd asama-agent >/dev/null; then
+    useradd --system \
+        --gid asama-agent \
+        --no-create-home \
+        --shell /sbin/nologin \
+        asama-agent
+fi
+
+mkdir -p /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs
+chown asama-agent:asama-agent /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs
+chmod 750 /opt/asama.ai/bin /opt/asama.ai/config /opt/asama.ai/logs
+chown asama-agent:asama-agent /opt/asama.ai/bin/otelcontribcol-otel-collector
+chmod 750 /opt/asama.ai/bin/otelcontribcol-otel-collector
+chown asama-agent:asama-agent /opt/asama.ai/config/otel-collector-config.yaml
+chmod 640 /opt/asama.ai/config/otel-collector-config.yaml
+chown root:root /etc/systemd/system/asama-otel-collector.service
+
+# EnvironmentFile=- paths: create empty host-agent.env if the operator has not.
+if [ ! -f /opt/asama.ai/config/host-agent.env ]; then
+    install -o asama-agent -g asama-agent -m 640 /dev/null /opt/asama.ai/config/host-agent.env
+fi
+if [ ! -f /opt/asama.ai/config/device_metadata.env ]; then
+    install -o asama-agent -g asama-agent -m 640 /dev/null /opt/asama.ai/config/device_metadata.env
+fi
+
+systemctl daemon-reload || echo "ERROR: Failed to reload systemd"
+systemctl enable asama-otel-collector.service || echo "ERROR: Failed to enable otel-collector"
+systemctl restart asama-otel-collector.service || echo "ERROR: Failed to restart otel-collector"

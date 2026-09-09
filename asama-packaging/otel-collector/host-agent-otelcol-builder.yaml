@@ -1,0 +1,29 @@
+# Single config for both amd64 and arm64. In the workflow we substitute ARCH_PLACEHOLDER
+# with "amd64" or "arm64" and pass the generated config to the builder.
+dist:
+  name: otelcontribcol-otel-collector
+  description: OpenTelemetry Collector Contrib - OTel Collector (for host agents)
+  output_path: ./bin/otelcontribcol-otel-collector_linux_ARCH_PLACEHOLDER
+  # OCB strips with -ldflags "-s -w" when false (default); explicit for host-agent packaging.
+  debug_compilation: false
+
+receivers:
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.141.0
+  - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/configfilereceiver v0.141.0
+    path: ./receiver/configfilereceiver
+
+processors:
+  - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/logdedupprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/configwatchsnapshot v0.141.0
+    path: ./processor/configwatchsnapshot
+
+replaces:
+  - github.com/open-telemetry/opentelemetry-collector-contrib/processor/configwatchsnapshot => ./processor/configwatchsnapshot
+  - github.com/open-telemetry/opentelemetry-collector-contrib/receiver/configfilereceiver => ./receiver/configfilereceiver
+
+exporters:
+  - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.141.0
