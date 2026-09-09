@@ -57,8 +57,8 @@ jobs:
           # Debian: one hyphen (upstream - revision). RPM Version cannot contain '-'.
           if [ "$channel" = test ]; then
             rev="asama.test.${asama_n}"
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
+            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || secrets.PULP_DEB_REPO_NAME || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || secrets.PULP_RPM_REPO_NAME || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
           else
             rev="asama.${asama_n}"
             echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }}" >> "$GITHUB_ENV"
@@ -149,7 +149,8 @@ jobs:
             echo "PULP_BASE_URL unset on this repo; skip Pulp"
             exit 0
           fi
-          python3 -m pip install --user pulp-cli==0.40.6 pulp-cli-deb pulp-cli-rpm==0.40.6
+          # RPM CLI lives in pulp-cli; pulp-cli-rpm is not published on PyPI.
+          python3 -m pip install --user pulp-cli==0.40.6 pulp-cli-deb
           asama-packaging/scripts/configure-pulp-cli.sh
 
       - name: Upload and publish packages in Pulp
@@ -161,10 +162,10 @@ jobs:
             echo "PULP_BASE_URL unset; skip Pulp upload"
             exit 0
           fi
-          pulp --config ~/.config/pulp/cli.toml deb content upload --repository "$DEB_REPOSITORY" --file "deb/asama-otel-collector_${DEB_VERSION}-1_amd64.deb"
-          pulp --config ~/.config/pulp/cli.toml deb publication create --repository "$DEB_REPOSITORY" --signing-service "$PULP_DEB_SIGNING_SERVICE"
-          find ~/rpmbuild/RPMS -name 'asama-otel-collector-*.rpm' -print0 | xargs -0 -r -n1 -I{} pulp --config ~/.config/pulp/cli.toml rpm content upload --repository "$RPM_REPOSITORY" --file '{}'
-          pulp --config ~/.config/pulp/cli.toml rpm publication create --repository "$RPM_REPOSITORY"
+          asama-packaging/scripts/pulp-asama.sh deb content upload --repository "$DEB_REPOSITORY" --file "deb/asama-otel-collector_${DEB_VERSION}-1_amd64.deb"
+          asama-packaging/scripts/pulp-asama.sh deb publication create --repository "$DEB_REPOSITORY" --signing-service "$PULP_DEB_SIGNING_SERVICE"
+          find ~/rpmbuild/RPMS -name 'asama-otel-collector-*.rpm' -print0 | xargs -0 -r -n1 -I{} asama-packaging/scripts/pulp-asama.sh rpm content upload --repository "$RPM_REPOSITORY" --file '{}'
+          asama-packaging/scripts/pulp-asama.sh rpm publication create --repository "$RPM_REPOSITORY"
 
       - name: Attach artifacts to the GitHub release
         if: startsWith(github.ref, 'refs/tags/')
