@@ -57,12 +57,15 @@ jobs:
           # Debian: one hyphen (upstream - revision). RPM Version cannot contain '-'.
           if [ "$channel" = test ]; then
             rev="asama.test.${asama_n}"
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || secrets.PULP_DEB_REPO_NAME || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || secrets.PULP_RPM_REPO_NAME || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
+            # Testing secrets only. Do not fall back to PULP_*_REPO_NAME (that sent test tags to production).
+            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
+            echo "Pulp channel=test deb=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }} rpm=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}"
           else
             rev="asama.${asama_n}"
             echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }}" >> "$GITHUB_ENV"
             echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}" >> "$GITHUB_ENV"
+            echo "Pulp channel=prod deb=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }} rpm=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}"
           fi
           echo "DEB_VERSION=${upstream}-${rev}" >> "$GITHUB_ENV"
           echo "RPM_VERSION=${upstream}" >> "$GITHUB_ENV"
