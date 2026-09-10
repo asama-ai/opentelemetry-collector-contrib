@@ -81,6 +81,121 @@ Any of these = “snapshot changed” → emit one event with full **before** an
 
 ---
 
+## Examples: PrechangeData and PostchangeData (4 scenarios)
+
+Metric used below (unless noted): `node_md_member_state` on host `host-a`.
+
+### 1) Metric removal (series removed)
+
+Disk `sdb` left the array. That series is gone.
+
+**PrechangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"array": "md0", "device": "sda", "state": "in_sync"}, "value": 1},
+    {"labels": {"array": "md0", "device": "sdb", "state": "in_sync"}, "value": 1}
+  ]
+}
+```
+
+**PostchangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"array": "md0", "device": "sda", "state": "in_sync"}, "value": 1}
+  ]
+}
+```
+
+`action`: `update` (metric still has series). If **all** series are gone → `action`: `delete` and PostchangeData is `{"series":[]}`.
+
+### 2) Metric added (series added)
+
+New disk `sdc` joined the array.
+
+**PrechangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"array": "md0", "device": "sda", "state": "in_sync"}, "value": 1}
+  ]
+}
+```
+
+**PostchangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"array": "md0", "device": "sda", "state": "in_sync"}, "value": 1},
+    {"labels": {"array": "md0", "device": "sdc", "state": "spare"}, "value": 1}
+  ]
+}
+```
+
+`action`: `update`. If metric went from empty `{"series":[]}` to having series → `action`: `create`.
+
+### 3) Update label
+
+Same device `sda`, but label `state` changed from `in_sync` to `faulty`.  
+In metrics this usually means: old series key removed + new series key added.
+
+**PrechangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"array": "md0", "device": "sda", "state": "in_sync"}, "value": 1},
+    {"labels": {"array": "md0", "device": "sdb", "state": "in_sync"}, "value": 1}
+  ]
+}
+```
+
+**PostchangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"array": "md0", "device": "sda", "state": "faulty"}, "value": 1},
+    {"labels": {"array": "md0", "device": "sdb", "state": "in_sync"}, "value": 1}
+  ]
+}
+```
+
+`action`: `update`.
+
+### 4) Update value
+
+Same labels, only the number changed (example metric: `node_bonding_active`).
+
+**PrechangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"master": "bond0"}, "value": 2}
+  ]
+}
+```
+
+**PostchangeData:**
+
+```json
+{
+  "series": [
+    {"labels": {"master": "bond0"}, "value": 1}
+  ]
+}
+```
+
+`action`: `update`.
+
+---
+
 ## Config (simple)
 
 Only a list of metric names to watch:
