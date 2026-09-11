@@ -7,8 +7,6 @@ Metrics are always forwarded unchanged (fail-open if changelog export fails).
 
 ## Config
 
-See [`examples/collector-vm-otel-collector.yaml`](examples/collector-vm-otel-collector.yaml).
-
 ```yaml
 processors:
   inventorydiff:
@@ -48,8 +46,12 @@ OTLP log with `service.name=asama-inventory-changelog` and attributes:
 
 ## ClickHouse
 
-DDL: [`migrations/001_identity_change.sql`](migrations/001_identity_change.sql)  
-Apply: `CLICKHOUSE_HOST=... ./examples/apply_migration.sh`
+Apply once (table may already exist):
+
+```bash
+export CLICKHOUSE_HOST=YOUR_CLICKHOUSE_HOST
+./migrations/001_identity_change.sh
+```
 
 Platform must route `service.name = asama-inventory-changelog` into `otel.identity_change`.
 Until that routing exists, events land in `otel.logs`.
