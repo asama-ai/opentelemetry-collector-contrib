@@ -1,0 +1,186 @@
+receivers:
+  # Local OTLP gRPC ingest for host-agent collectors / high-resolution path (default 127.0.0.1:4319).
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:4319
+  configfile:
+    state_path: /opt/asama.ai/cache/configfile-state.json
+    poll_interval: 1h
+    max_keys_per_file: 1000
+    exclude_keys:
+      - "*password*"
+      - "*secret*"
+      - "*token*"
+      - "*_key"
+      - "*credential*"
+    files:
+      - path: /opt/asama.ai/config/host-agent.yaml
+      - path: /opt/asama.ai/config/otel-collector-config.yaml
+  journald:
+    units: []
+    priority: "0..4" # Only collect errors: emerg(0), alert(1), crit(2), err(3)
+    start_at: end
+    operators:
+      # Set service.name FIRST (before copying body, so data is still in body)
+      # Use bracket notation to create flat key "service.name" (not nested service.name)
+      # Try SYSLOG_IDENTIFIER first (preferred)
+      - type: copy
+        id: copy_syslog_id_to_service
+        from: body.SYSLOG_IDENTIFIER
+        to: resource["service.name"]
+        if: 'body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER != ""'
+        on_error: send
+      # Fallback to _SYSTEMD_USER_UNIT if SYSLOG_IDENTIFIER doesn't exist (for user services)
+      - type: copy
+        id: copy_systemd_user_unit_to_service
+        from: body._SYSTEMD_USER_UNIT
+        to: resource["service.name"]
+        if: "body.SYSLOG_IDENTIFIER == nil && body._SYSTEMD_USER_UNIT != nil"
+        on_error: send
+      # Fallback to _SYSTEMD_UNIT if neither SYSLOG_IDENTIFIER nor _SYSTEMD_USER_UNIT exist (for system services)
+      - type: copy
+        id: copy_systemd_unit_to_service
+        from: body._SYSTEMD_UNIT
+        to: resource["service.name"]
+        if: "body.SYSLOG_IDENTIFIER == nil && body._SYSTEMD_USER_UNIT == nil && body._SYSTEMD_UNIT != nil"
+        on_error: send
+      # Fallback to _COMM if none of the above exist
+      - type: copy
+        id: copy_comm_to_service
+        from: body._COMM
+        to: resource["service.name"]
+        if: "body.SYSLOG_IDENTIFIER == nil && body._SYSTEMD_USER_UNIT == nil && body._SYSTEMD_UNIT == nil && body._COMM != nil"
+        on_error: send
+      # Note: host.name and serial.number are set from environment variables via transform processor
+      # Do NOT set them here to avoid overriding env var values
+      # Copy entire body map to attributes.body (creates nested structure)
+      - type: add
+        id: copy_body_to_attributes
+        field: attributes.body
+        value: EXPR(body)
+        on_error: send
+      # Extract MESSAGE from attributes.body.MESSAGE to body (removes MESSAGE from attributes.body)
+      - type: move
+        id: extract_message
+        from: attributes.body.MESSAGE
+        to: body
+        on_error: send
+      # Flatten attributes.body to move all fields to attributes.* (flat structure)
+      - type: flatten
+        id: flatten_attributes
+        field: attributes.body
+        on_error: send
+      # Map PRIORITY directly to SeverityNumber (using same number mapping)
+      # Since we only collect errors (0..4):
+      - type: severity_parser
+        id: parse_priority
+        parse_from: attributes.PRIORITY
+        mapping:
+          fatal3: "0" # PRIORITY 0 (emerg) -> SeverityNumber 21 (fatal)
+          fatal2: "1" # PRIORITY 1 (alert) -> SeverityNumber 22 (fatal2)
+          fatal: "2" # PRIORITY 2 (crit) -> SeverityNumber 23 (fatal3)
+          error: "3" # PRIORITY 3 (err) -> SeverityNumber 17 (error)
+          warn: "4" # PRIORITY 4 (warn) -> SeverityNumber 10 (warn)
+        overwrite_text: true
+        on_error: send
+
+processors:
+  # Log deduplication: Aggregate identical logs over time interval
+  logdedup:
+    interval: 60s # Aggregate logs over 60 second intervals
+    log_count_attribute: log_count # Attribute name for count of deduplicated logs
+    timezone: UTC # Timezone for first/last observed timestamps
+    # Optional: Only deduplicate logs matching conditions (leave empty to deduplicate all)
+    # conditions:
+    #   - severity_number >= 17  # Only deduplicate ERROR and above
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+  # On written|replaced actor logs, read the file and append config.event=changed snapshot logs.
+  # Requires custom otel build (build/otel-collector/otel-collector-build-config.yaml).
+  configwatch_snapshot:
+    files:
+      - /opt/asama.ai/config/host-agent.yaml
+      - /opt/asama.ai/config/otel-collector-config.yaml
+    max_keys_per_file: 1000
+    exclude_keys:
+      - "*password*"
+      - "*secret*"
+      - "*token*"
+      - "*_key"
+      - "*credential*"
+  # Drop actor events from the snapshot pipeline (processor emits changed rows first).
+  # filter drops records whose OTTL condition is true (transform drop() is not valid OTTL).
+  filter/configfile_snapshots_only:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'attributes["config.event"] == "written" or attributes["config.event"] == "replaced" or attributes["config.event"] == "deleted"'
+  # Keep only actor events for the events pipeline.
+  filter/configfile_events_only:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'resource.attributes["service.name"] != "asama-configfile"'
+        - 'attributes["config.event"] != "written" and attributes["config.event"] != "replaced" and attributes["config.event"] != "deleted"'
+  # Transform: fleet identity from HOST_NAME / SERIAL_NUMBER (yaml_to_env.sh from device_metadata.yaml).
+  # Logs use OTel semconv (host.name, serial.number) for ClickHouse Hostname/SerialNumber columns.
+  # Metrics use hostname / serial_number to align with eBPF monitor datapoint labels and Prometheus remote write.
+  transform:
+    error_mode: ignore
+    log_statements:
+      - context: resource
+        statements:
+          - set(resource.attributes["host.name"], "${HOST_NAME}") where "${HOST_NAME}" != ""
+          - set(resource.attributes["serial.number"], "${SERIAL_NUMBER}") where "${SERIAL_NUMBER}" != ""
+    metric_statements:
+      - context: resource
+        statements:
+          # Skip empty env so a blank device_metadata.env cannot wipe OTLP identity.
+          - set(resource.attributes["hostname"], "${HOST_NAME}") where "${HOST_NAME}" != ""
+          - set(resource.attributes["serial_number"], "${SERIAL_NUMBER}") where "${SERIAL_NUMBER}" != ""
+          # Drop semconv keys so Prometheus remote-write does not also emit host_name.
+          - delete_key(resource.attributes, "host.name") where "${HOST_NAME}" != ""
+          - delete_key(resource.attributes, "serial.number") where "${SERIAL_NUMBER}" != ""
+          - delete_key(resource.attributes, "host_name") where "${HOST_NAME}" != ""
+
+exporters:
+  otlp:
+    # Set ASAMA_OTEL_ENDPOINT in /opt/asama.ai/config/host-agent.env (not written by the installer).
+    # Shared by journald, metrics, and config snapshots. Point it at a private collector hop
+    # (VPN/VPC/mTLS). For production TLS, set insecure: false and provide a CA / client cert.
+    endpoint: "${ASAMA_OTEL_ENDPOINT}"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    logs:
+      receivers: [journald]
+      processors: [transform, logdedup, batch]
+      exporters: [otlp]
+    # eBPF golden metrics: ebpf-monitor → otlp:4319 → transform (host labels) → ASAMA_OTEL_ENDPOINT
+    metrics:
+      receivers: [otlp]
+      processors: [transform, batch]
+      exporters: [otlp]
+    # Actor logs (eBPF ConfigWatch) → upstream otel_configfile_events table.
+    logs/configfile_events:
+      receivers: [otlp]
+      processors: [transform, filter/configfile_events_only, batch]
+      exporters: [otlp]
+    # Hourly configfile receiver + processor-generated snapshots (config.event=changed).
+    logs/configfiles:
+      receivers: [configfile, otlp]
+      processors:
+        [
+          transform,
+          configwatch_snapshot,
+          filter/configfile_snapshots_only,
+          batch,
+        ]
+      exporters: [otlp]
+  telemetry:
+    metrics:
+      level: none

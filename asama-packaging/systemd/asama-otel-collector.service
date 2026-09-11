@@ -1,0 +1,34 @@
+[Unit]
+Description=Asama AI OpenTelemetry Collector
+After=network.target
+Documentation=https://github.com/asama-ai/host-agent
+
+[Service]
+Type=simple
+User=asama-agent
+Group=asama-agent
+# adm: hardened hosts (journal ACLs grant adm/wheel). systemd-journal: default on Debian/Ubuntu etc.
+SupplementaryGroups=adm systemd-journal
+# Optional: missing files must not fail the unit. host-agent generates
+# device_metadata.env; host-agent.env is operator-created (not shipped).
+EnvironmentFile=-/opt/asama.ai/config/device_metadata.env
+EnvironmentFile=-/opt/asama.ai/config/host-agent.env
+ExecStart=/opt/asama.ai/bin/otelcontribcol-otel-collector --config=/opt/asama.ai/config/otel-collector-config.yaml
+Restart=always
+RestartSec=10
+Slice=asama.slice
+
+# Security
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadOnlyDirectories=/
+ReadWriteDirectories=/opt/asama.ai/
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+#SELinuxContext=system_u:system_r:asama_agent_t:s0
+
+[Install]
+WantedBy=multi-user.target
