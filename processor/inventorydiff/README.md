@@ -34,7 +34,9 @@ Compares label sets + values only (timestamps ignored):
 - series added / removed
 - label change
 - value change
-- watched metric missing while host is still present → `action=delete`, empty post series
+- watched metric present with zero series → `action=delete`, empty post series
+
+Watched metrics **absent** from a batch are skipped (partial domain×tier OTLP pushes must not look like deletes).
 
 ## Event
 
@@ -44,17 +46,18 @@ OTLP log with `service.name=asama-inventory-changelog` and attributes:
 - `prechange_data`, `postchange_data` (JSON snapshots)
 - `pre_observed_at`, `post_observed_at`
 
-## ClickHouse
+## ClickHouse + platform routing
 
-Apply once (table may already exist):
+**1. Recreate table** (logs-shaped, like `otel_configfiles`):
 
 ```bash
 export CLICKHOUSE_HOST=YOUR_CLICKHOUSE_HOST
 ./migrations/001_identity_change.sh
 ```
 
-Platform must route `service.name = asama-inventory-changelog` into `otel.identity_change`.
-Until that routing exists, events land in `otel.logs`.
+**2. Platform `otel-exporter.yaml`** — add filter, exporter, pipeline; exclude from `logs/general` (same pattern as configfiles). See README section below / deploy notes.
+
+**3. Restart** `otel-exporter`, then query:
 
 ```sql
 SELECT Timestamp, Hostname, Metric, Action, RequestId, PrechangeData, PostchangeData

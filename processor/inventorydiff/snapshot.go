@@ -148,12 +148,14 @@ func hostnamesInMetrics(md pmetric.Metrics) []string {
 }
 
 // snapshotFromMetrics builds a snapshot for one hostname + metric name from the batch.
-// If the metric is absent, Series is empty (still sets ObservedAt).
-func snapshotFromMetrics(md pmetric.Metrics, hostname, metricName string, now time.Time) MetricSnapshot {
+// present is false when the metric name does not appear for that host (caller should skip).
+// present is true with empty Series when the metric exists but has no datapoints.
+func snapshotFromMetrics(md pmetric.Metrics, hostname, metricName string, now time.Time) (MetricSnapshot, bool) {
 	snap := MetricSnapshot{
 		ObservedAt: now.UTC().Format(time.RFC3339Nano),
 		Series:     []SeriesPoint{},
 	}
+	present := false
 	rms := md.ResourceMetrics()
 	for i := 0; i < rms.Len(); i++ {
 		rm := rms.At(i)
@@ -168,11 +170,12 @@ func snapshotFromMetrics(md pmetric.Metrics, hostname, metricName string, now ti
 				if m.Name() != metricName {
 					continue
 				}
+				present = true
 				appendMetricSeries(&snap, m)
 			}
 		}
 	}
-	return snap
+	return snap, present
 }
 
 func appendMetricSeries(snap *MetricSnapshot, m pmetric.Metric) {

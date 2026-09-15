@@ -59,13 +59,18 @@ func (p *inventoryDiffProcessor) shutdown(context.Context) error {
 
 // processMetrics compares watched metrics to cached snapshots and emits changelog events.
 // Metrics are always forwarded unchanged (fail-open on changelog errors).
+// Watched metrics absent from this batch are skipped (partial domain×tier pushes must not
+// look like deletes).
 func (p *inventoryDiffProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
 	for _, hostname := range hostnamesInMetrics(md) {
 		for _, metricName := range p.cfg.Metrics {
-			current := snapshotFromMetrics(md, hostname, metricName, now)
+			current, present := snapshotFromMetrics(md, hostname, metricName, now)
+			if !present {
+				continue
+			}
 			prev, ok := p.state.Get(hostname, metricName)
 			if !ok {
 				p.state.Set(hostname, metricName, current)

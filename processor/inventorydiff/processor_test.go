@@ -174,7 +174,7 @@ func TestSeriesRemovedEmitsEvent(t *testing.T) {
 	require.Equal(t, 1, cap.count())
 }
 
-func TestMetricMissingEmitsDelete(t *testing.T) {
+func TestMetricAbsentFromBatchSkipped(t *testing.T) {
 	cap := &captureSender{}
 	p := testProcessor(t, []string{"node_md_member_state"}, cap)
 	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
@@ -182,7 +182,7 @@ func TestMetricMissingEmitsDelete(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	// Host still present, watched metric absent → empty series.
+	// Host still present, watched metric not in this batch (e.g. storage/health) → no event.
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
 	rm.Resource().Attributes().PutStr("hostname", "host-a")
@@ -191,6 +191,27 @@ func TestMetricMissingEmitsDelete(t *testing.T) {
 	other.SetEmptyGauge().DataPoints().AppendEmpty().SetDoubleValue(1)
 
 	_, err = p.processMetrics(context.Background(), md)
+	require.NoError(t, err)
+	require.Equal(t, 0, cap.count())
+
+	// Same series again later → still no event (cache unchanged).
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	}))
+	require.NoError(t, err)
+	require.Equal(t, 0, cap.count())
+}
+
+func TestMetricPresentEmptySeriesEmitsDelete(t *testing.T) {
+	cap := &captureSender{}
+	p := testProcessor(t, []string{"node_md_member_state"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	}))
+	require.NoError(t, err)
+
+	// Metric name present with zero datapoints → real empty snapshot → delete.
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", nil))
 	require.NoError(t, err)
 	require.Equal(t, 1, cap.count())
 	attrs := lastAttrs(t, cap)
