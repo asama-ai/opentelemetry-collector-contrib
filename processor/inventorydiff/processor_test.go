@@ -5,6 +5,7 @@ package inventorydiff
 
 import (
 	"context"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -288,6 +289,96 @@ func TestConfigValidate(t *testing.T) {
 		Metrics:   []string{"m"},
 		Changelog: ChangelogExport{Endpoint: "http://x"},
 	}).Validate())
+	require.Error(t, (&Config{
+		Metrics:   []string{"m"},
+		Changelog: ChangelogExport{Endpoint: "http://x"},
+		ComponentSync: &ComponentSyncConfig{Tenant: "t"},
+	}).Validate())
+	require.NoError(t, (&Config{
+		Metrics:   []string{"m"},
+		Changelog: ChangelogExport{Endpoint: "http://x"},
+		ComponentSync: &ComponentSyncConfig{
+			TemporalAddress: "localhost:7233",
+			Tenant:          "nxtgen",
+		},
+	}).Validate())
+}
+
+type captureComponentSyncStarter struct {
+	mu    sync.Mutex
+	calls []struct {
+		hostname, metric, requestID string
+	}
+	err  error
+	done chan struct{}
+}
+
+func (c *captureComponentSyncStarter) StartComponentSync(_ context.Context, hostname, metric, requestID string) error {
+	c.mu.Lock()
+	c.calls = append(c.calls, struct{ hostname, metric, requestID string }{hostname, metric, requestID})
+	c.mu.Unlock()
+	if c.done != nil {
+		c.done <- struct{}{}
+	}
+	return c.err
+}
+
+func (c *captureComponentSyncStarter) Close() {}
+
+func (c *captureComponentSyncStarter) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.calls)
+}
+
+func TestComponentSyncTriggerOnChange(t *testing.T) {
+	cap := &captureSender{}
+	sync := &captureComponentSyncStarter{done: make(chan struct{}, 1)}
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	p.componentSync = sync
+
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
+	}))
+	require.NoError(t, err)
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sdb"}, Value: 1},
+	}))
+	require.NoError(t, err)
+
+	waitComponentSync(t, sync.done)
+	require.Equal(t, 1, cap.count())
+	require.Equal(t, 1, sync.count())
+	require.Equal(t, "host-a", sync.calls[0].hostname)
+	require.Equal(t, "node_md_member_info", sync.calls[0].metric)
+	require.NotEmpty(t, sync.calls[0].requestID)
+}
+
+func TestComponentSyncFailureStillForwardsMetrics(t *testing.T) {
+	cap := &captureSender{}
+	sync := &captureComponentSyncStarter{err: io.EOF, done: make(chan struct{}, 1)}
+	p := testProcessor(t, []string{"m"}, cap)
+	p.componentSync = sync
+
+	md1 := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 1}})
+	_, err := p.processMetrics(context.Background(), md1)
+	require.NoError(t, err)
+	md2 := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 2}})
+	out, err := p.processMetrics(context.Background(), md2)
+	require.NoError(t, err)
+	waitComponentSync(t, sync.done)
+	require.Equal(t, 1, out.MetricCount())
+	require.Equal(t, 1, cap.count())
+	require.Equal(t, 1, sync.count())
+}
+
+func waitComponentSync(t *testing.T, done <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for component sync trigger")
+	}
 }
 
 func TestFactory(t *testing.T) {

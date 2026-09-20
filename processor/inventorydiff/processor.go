@@ -29,12 +29,13 @@ const (
 )
 
 type inventoryDiffProcessor struct {
-	logger *zap.Logger
-	cfg    *Config
-	state  *stateStore
-	sender changelogSender
-	now    func() time.Time
-	mu     sync.Mutex // serializes compare/update across concurrent ConsumeMetrics
+	logger      *zap.Logger
+	cfg         *Config
+	state       *stateStore
+	sender      changelogSender
+	componentSync componentSyncStarter
+	now         func() time.Time
+	mu          sync.Mutex // serializes compare/update across concurrent ConsumeMetrics
 }
 
 func newProcessor(logger *zap.Logger, cfg *Config) *inventoryDiffProcessor {
@@ -50,10 +51,21 @@ func (p *inventoryDiffProcessor) start(_ context.Context, _ component.Host) erro
 	if p.sender == nil {
 		p.sender = newHTTPChangelogSender(p.cfg.Changelog)
 	}
+	if p.componentSync == nil && p.cfg.ComponentSync != nil {
+		starter, err := newTemporalComponentSyncStarter(p.cfg.ComponentSync.normalized())
+		if err != nil {
+			return err
+		}
+		p.componentSync = starter
+	}
 	return nil
 }
 
 func (p *inventoryDiffProcessor) shutdown(context.Context) error {
+	if p.componentSync != nil {
+		p.componentSync.Close()
+		p.componentSync = nil
+	}
 	return nil
 }
 
@@ -130,5 +142,31 @@ func (p *inventoryDiffProcessor) emitChangelog(
 	attrs.PutStr(attrPreObservedAt, pre.ObservedAt)
 	attrs.PutStr(attrPostObservedAt, post.ObservedAt)
 
+	if p.componentSync != nil {
+		p.triggerComponentSync(hostname, metric, requestID)
+	}
 	return p.sender.Send(ctx, ld)
+}
+
+func (p *inventoryDiffProcessor) triggerComponentSync(hostname, metric, requestID string) {
+	starter := p.componentSync
+	if starter == nil {
+		return
+	}
+	timeout := 10 * time.Second
+	if p.cfg.ComponentSync != nil && p.cfg.ComponentSync.Timeout > 0 {
+		timeout = p.cfg.ComponentSync.Timeout
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := starter.StartComponentSync(ctx, hostname, metric, requestID); err != nil {
+			p.logger.Warn("inventorydiff: component sync workflow start failed",
+				zap.String("hostname", hostname),
+				zap.String("metric", metric),
+				zap.String("request_id", requestID),
+				zap.Error(err),
+			)
+		}
+	}()
 }

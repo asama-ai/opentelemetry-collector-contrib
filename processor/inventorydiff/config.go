@@ -6,6 +6,7 @@ package inventorydiff // import "github.com/open-telemetry/opentelemetry-collect
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -20,8 +21,9 @@ type ChangelogExport struct {
 
 // Config is the inventorydiff processor configuration.
 type Config struct {
-	Metrics   []string        `mapstructure:"metrics"`
-	Changelog ChangelogExport `mapstructure:"changelog"`
+	Metrics   []string         `mapstructure:"metrics"`
+	Changelog ChangelogExport  `mapstructure:"changelog"`
+	ComponentSync *ComponentSyncConfig `mapstructure:"component_sync"`
 }
 
 func createDefaultConfig() component.Config {
@@ -45,6 +47,14 @@ func (c *Config) Validate() error {
 	}
 	if c.Changelog.Endpoint == "" {
 		return errors.New("changelog.endpoint is required")
+	}
+	if c.ComponentSync != nil {
+		if strings.TrimSpace(c.ComponentSync.TemporalAddress) == "" {
+			return errors.New("component_sync.temporal_address is required when component_sync is configured")
+		}
+		if strings.TrimSpace(c.ComponentSync.Tenant) == "" {
+			return errors.New("component_sync.tenant is required when component_sync is configured")
+		}
 	}
 	return nil
 }
