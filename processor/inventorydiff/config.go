@@ -6,6 +6,7 @@ package inventorydiff // import "github.com/open-telemetry/opentelemetry-collect
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,8 +22,8 @@ type ChangelogExport struct {
 
 // Config is the inventorydiff processor configuration.
 type Config struct {
-	Metrics   []string         `mapstructure:"metrics"`
-	Changelog ChangelogExport  `mapstructure:"changelog"`
+	Metrics       []string             `mapstructure:"metrics"`
+	Changelog     ChangelogExport      `mapstructure:"changelog"`
 	ComponentSync *ComponentSyncConfig `mapstructure:"component_sync"`
 }
 
@@ -45,8 +46,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("metrics[%d] must not be empty", i)
 		}
 	}
-	if c.Changelog.Endpoint == "" {
-		return errors.New("changelog.endpoint is required")
+	if err := validateChangelogEndpoint(c.Changelog.Endpoint); err != nil {
+		return err
 	}
 	if c.ComponentSync != nil {
 		if strings.TrimSpace(c.ComponentSync.TemporalAddress) == "" {
@@ -55,6 +56,14 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(c.ComponentSync.Tenant) == "" {
 			return errors.New("component_sync.tenant is required when component_sync is configured")
 		}
+	}
+	return nil
+}
+
+func validateChangelogEndpoint(endpoint string) error {
+	u, err := url.ParseRequestURI(strings.TrimSpace(endpoint))
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("changelog.endpoint must be an absolute HTTP or HTTPS URL")
 	}
 	return nil
 }

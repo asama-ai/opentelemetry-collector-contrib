@@ -57,15 +57,16 @@ func (s *httpChangelogSender) Send(ctx context.Context, ld plog.Logs) error {
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Content-Type", "application/x-protobuf")
 	for k, v := range s.headers {
 		httpReq.Header.Set(k, v)
 	}
+	// Configured headers must not replace the protobuf content type.
+	httpReq.Header.Set("Content-Type", "application/x-protobuf")
 	resp, err := s.client.Do(httpReq)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("changelog export status %d", resp.StatusCode)

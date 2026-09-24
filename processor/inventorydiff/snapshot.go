@@ -4,10 +4,10 @@
 package inventorydiff // import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/inventorydiff"
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -17,8 +17,40 @@ import (
 // SeriesPoint is one time series under a metric.
 type SeriesPoint struct {
 	Labels    map[string]string `json:"labels"`
-	Value     float64           `json:"value"`
-	Timestamp string            `json:"timestamp"` // datapoint time (RFC3339); not used in compareSnapshots
+	Value     float64           `json:"-"`
+	exactInt  bool
+	intVal    int64
+	Timestamp string `json:"timestamp"` // datapoint time (RFC3339); not used in compareSnapshots
+}
+
+func (sp SeriesPoint) MarshalJSON() ([]byte, error) {
+	rawValue, err := sp.marshalValue()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		Labels    map[string]string `json:"labels"`
+		Value     json.RawMessage   `json:"value"`
+		Timestamp string            `json:"timestamp"`
+	}{
+		Labels:    sp.Labels,
+		Value:     rawValue,
+		Timestamp: sp.Timestamp,
+	})
+}
+
+func (sp SeriesPoint) marshalValue() (json.RawMessage, error) {
+	if sp.exactInt {
+		return json.RawMessage(strconv.FormatInt(sp.intVal, 10)), nil
+	}
+	return json.Marshal(sp.Value)
+}
+
+func (sp SeriesPoint) valueIdentity() string {
+	if sp.exactInt {
+		return "i:" + strconv.FormatInt(sp.intVal, 10)
+	}
+	return "f:" + strconv.FormatFloat(sp.Value, 'g', -1, 64)
 }
 
 // MetricSnapshot is all series for one metric on one host at one observation.
@@ -27,15 +59,17 @@ type MetricSnapshot struct {
 	Series     []SeriesPoint `json:"series"`
 }
 
-// KeySet maps canonical label keys to values (timestamps ignored).
-func (s MetricSnapshot) KeySet() map[string]float64 {
-	out := make(map[string]float64, len(s.Series))
+// KeySet maps canonical label keys to value identities (timestamps ignored).
+func (s MetricSnapshot) KeySet() map[string]string {
+	out := make(map[string]string, len(s.Series))
 	for _, sp := range s.Series {
-		out[seriesKey(sp.Labels)] = sp.Value
+		out[seriesKey(sp.Labels)] = sp.valueIdentity()
 	}
 	return out
 }
 
+// seriesKey is an injective encoding of a label set. Length prefixes keep
+// values that contain separators from colliding with other label sets.
 func seriesKey(labels map[string]string) string {
 	if len(labels) == 0 {
 		return ""
@@ -45,11 +79,18 @@ func seriesKey(labels map[string]string) string {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, k+"="+labels[k])
+	var b []byte
+	var lenBuf [4]byte
+	write := func(s string) {
+		binary.BigEndian.PutUint32(lenBuf[:], uint32(len(s)))
+		b = append(b, lenBuf[:]...)
+		b = append(b, s...)
 	}
-	return strings.Join(parts, ",")
+	for _, k := range keys {
+		write(k)
+		write(labels[k])
+	}
+	return string(b)
 }
 
 // compareSnapshots returns true when label keys and values match (timestamps ignored).
@@ -86,6 +127,8 @@ func cloneSnapshot(s MetricSnapshot) MetricSnapshot {
 		out.Series[i] = SeriesPoint{
 			Labels:    labels,
 			Value:     sp.Value,
+			exactInt:  sp.exactInt,
+			intVal:    sp.intVal,
 			Timestamp: sp.Timestamp,
 		}
 	}
@@ -170,46 +213,58 @@ func snapshotFromMetrics(md pmetric.Metrics, hostname, metricName string, now ti
 				if m.Name() != metricName {
 					continue
 				}
+				if !appendMetricSeries(&snap, m) {
+					continue
+				}
 				present = true
-				appendMetricSeries(&snap, m)
 			}
 		}
 	}
 	return snap, present
 }
 
-func appendMetricSeries(snap *MetricSnapshot, m pmetric.Metric) {
+func appendMetricSeries(snap *MetricSnapshot, m pmetric.Metric) bool {
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
 		dps := m.Gauge().DataPoints()
 		for i := 0; i < dps.Len(); i++ {
 			dp := dps.At(i)
-			snap.Series = append(snap.Series, SeriesPoint{
+			sp := SeriesPoint{
 				Labels:    attrsToMap(dp.Attributes()),
-				Value:     numberValue(dp),
 				Timestamp: tsRFC3339(dp.Timestamp()),
-			})
+			}
+			applyNumber(&sp, dp)
+			snap.Series = append(snap.Series, sp)
 		}
+		return true
 	case pmetric.MetricTypeSum:
 		dps := m.Sum().DataPoints()
 		for i := 0; i < dps.Len(); i++ {
 			dp := dps.At(i)
-			snap.Series = append(snap.Series, SeriesPoint{
+			sp := SeriesPoint{
 				Labels:    attrsToMap(dp.Attributes()),
-				Value:     numberValue(dp),
 				Timestamp: tsRFC3339(dp.Timestamp()),
-			})
+			}
+			applyNumber(&sp, dp)
+			snap.Series = append(snap.Series, sp)
 		}
+		return true
+	default:
+		// Histogram, Summary, and ExponentialHistogram are not inventory series.
+		// Leaving them absent avoids emitting a false delete.
+		return false
 	}
 }
 
-func numberValue(dp pmetric.NumberDataPoint) float64 {
+func applyNumber(sp *SeriesPoint, dp pmetric.NumberDataPoint) {
 	switch dp.ValueType() {
-	case pmetric.NumberDataPointValueTypeDouble:
-		return dp.DoubleValue()
 	case pmetric.NumberDataPointValueTypeInt:
-		return float64(dp.IntValue())
+		sp.exactInt = true
+		sp.intVal = dp.IntValue()
+		sp.Value = float64(sp.intVal)
+	case pmetric.NumberDataPointValueTypeDouble:
+		sp.Value = dp.DoubleValue()
 	default:
-		return 0
+		sp.Value = 0
 	}
 }
