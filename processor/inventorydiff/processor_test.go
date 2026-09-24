@@ -290,8 +290,8 @@ func TestConfigValidate(t *testing.T) {
 		Changelog: ChangelogExport{Endpoint: "http://x"},
 	}).Validate())
 	require.Error(t, (&Config{
-		Metrics:   []string{"m"},
-		Changelog: ChangelogExport{Endpoint: "http://x"},
+		Metrics:       []string{"m"},
+		Changelog:     ChangelogExport{Endpoint: "http://x"},
 		ComponentSync: &ComponentSyncConfig{Tenant: "t"},
 	}).Validate())
 	require.NoError(t, (&Config{
@@ -301,6 +301,10 @@ func TestConfigValidate(t *testing.T) {
 			TemporalAddress: "localhost:7233",
 			Tenant:          "nxtgen",
 		},
+	}).Validate())
+	require.Error(t, (&Config{
+		Metrics:   []string{"m"},
+		Changelog: ChangelogExport{Endpoint: "localhost:4318"},
 	}).Validate())
 }
 
@@ -372,6 +376,11 @@ func TestComponentSyncFailureStillForwardsMetrics(t *testing.T) {
 	require.Equal(t, 1, sync.count())
 }
 
+func TestFactory(t *testing.T) {
+	f := NewFactory()
+	require.Equal(t, "inventorydiff", f.Type().String())
+}
+
 func waitComponentSync(t *testing.T, done <-chan struct{}) {
 	t.Helper()
 	select {
@@ -381,7 +390,68 @@ func waitComponentSync(t *testing.T, done <-chan struct{}) {
 	}
 }
 
-func TestFactory(t *testing.T) {
-	f := NewFactory()
-	require.Equal(t, "inventorydiff", f.Type().String())
+func TestSeriesKeyDoesNotCollide(t *testing.T) {
+	a := MetricSnapshot{Series: []SeriesPoint{{Labels: map[string]string{"a": "b,c=d"}, Value: 1}}}
+	b := MetricSnapshot{Series: []SeriesPoint{
+		{Labels: map[string]string{"a": "b", "c": "d"}, Value: 1},
+	}}
+	require.False(t, compareSnapshots(a, b))
+}
+
+func TestExactIntValuesStayDistinct(t *testing.T) {
+	const hi int64 = 9007199254740993
+	const lo int64 = 9007199254740992
+	sa, ok := snapshotFromMetrics(intGauge("host-a", "m", hi), "host-a", "m", time.Now())
+	require.True(t, ok)
+	sb, ok := snapshotFromMetrics(intGauge("host-a", "m", lo), "host-a", "m", time.Now())
+	require.True(t, ok)
+	require.False(t, compareSnapshots(sa, sb))
+	require.Contains(t, snapshotToJSON(sa), "9007199254740993")
+}
+
+func TestHistogramDoesNotEmitDelete(t *testing.T) {
+	cap := &captureSender{}
+	p := testProcessor(t, []string{"m"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "m", []SeriesPoint{
+		{Labels: map[string]string{"a": "1"}, Value: 1},
+	}))
+	require.NoError(t, err)
+
+	md := pmetric.NewMetrics()
+	rm := md.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("hostname", "host-a")
+	m := rm.ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
+	m.SetName("m")
+	m.SetEmptyHistogram().DataPoints().AppendEmpty()
+	_, err = p.processMetrics(context.Background(), md)
+	require.NoError(t, err)
+	require.Equal(t, 0, cap.count())
+}
+
+func TestChangelogFailureRetriesAndSkipsSync(t *testing.T) {
+	cap := &captureSender{err: io.EOF}
+	syncer := &captureComponentSyncStarter{done: make(chan struct{}, 1)}
+	p := testProcessor(t, []string{"m"}, cap)
+	p.componentSync = syncer
+
+	base := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 1}})
+	_, err := p.processMetrics(context.Background(), base)
+	require.NoError(t, err)
+	changed := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 2}})
+	_, err = p.processMetrics(context.Background(), changed)
+	require.NoError(t, err)
+	_, err = p.processMetrics(context.Background(), changed)
+	require.NoError(t, err)
+	require.Equal(t, 2, cap.count())
+	require.Equal(t, 0, syncer.count())
+}
+
+func intGauge(host, name string, v int64) pmetric.Metrics {
+	md := pmetric.NewMetrics()
+	rm := md.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("hostname", host)
+	m := rm.ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
+	m.SetName(name)
+	m.SetEmptyGauge().DataPoints().AppendEmpty().SetIntValue(v)
+	return md
 }

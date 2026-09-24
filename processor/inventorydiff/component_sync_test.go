@@ -4,6 +4,7 @@
 package inventorydiff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,15 @@ func TestComponentsForMetric(t *testing.T) {
 
 func TestComponentSyncWorkflowID(t *testing.T) {
 	got := componentSyncWorkflowID("nxtgen", "asama-test-02", []string{"storage", "nfs"})
-	require.Equal(t, "asama-test-02/component-sync/nfs-storage/nxtgen", got)
+	require.True(t, strings.HasPrefix(got, "asama-test-02/component-sync/"))
+	require.Contains(t, got, "nfs-storage-")
+	require.Contains(t, got, "nxtgen-")
+
+	a := componentSyncWorkflowID("acme/us", "host", []string{"storage"})
+	b := componentSyncWorkflowID("acme?us", "host", []string{"storage"})
+	require.NotEqual(t, a, b)
+	require.Contains(t, a, "acme-us-")
+	require.Contains(t, b, "acme-us-")
 }
 
 func TestComponentSyncConfigNormalized(t *testing.T) {

@@ -89,7 +89,7 @@ Metric → component mapping matches CISS:
 | `dmidecode_processor_info` | `processor` |
 | `node_filesystem_*` | `nfs` |
 
-Workflow ID: `{hostname}/component-sync/{components}/{tenant}` with terminate-if-running reuse.
+Workflow ID: `{hostname}/component-sync/{components}/{tenant}` (sanitized, with a short hash so distinct tenants cannot collide) and terminate-if-running reuse.
 
 Requires `ciss worker` polling the same task queue. Temporal start is async and fail-open.
 
@@ -99,7 +99,7 @@ Requires `ciss worker` polling the same task queue. Temporal start is async and 
 
 ```bash
 export CLICKHOUSE_HOST=YOUR_CLICKHOUSE_HOST
-./migrations/001_identity_change.sh
+./processor/inventorydiff/migrations/001_identity_change.sh
 ```
 
 **2. Platform `otel-exporter.yaml`** — add filter, exporter, pipeline; exclude from `logs/general` (same pattern as configfiles). See README section below / deploy notes.
