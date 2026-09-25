@@ -98,7 +98,7 @@ func init() {
 			},
 			Payload: []FieldMap{
 				{FromMetric: "serial_number", ToKG: "serial_number"},
-				{FromMetric: "slot", ToKG: ""},
+				{FromMetric: "slot", ToKG: "slot"},
 			},
 			Topology: pathDeviceRAIDOsDisk(),
 		},

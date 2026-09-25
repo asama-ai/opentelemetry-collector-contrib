@@ -49,7 +49,9 @@ func expandEvents(hostname, metric string, pre, post MetricSnapshot) []Inventory
 		}
 		if pe.value != po.value || !labelsEqualIgnoring(pe.labels, po.labels, idLabels) {
 			ev := baseEvent(hostname, metric, spec, po, "update", observed)
+			ev.Changes = seriesFieldChanges(pe, po, idLabels)
 			enrichEvent(&ev, pe.labels, po.labels)
+			ev.Summary = appendChangeDetails(ev.Summary, ev.Changes)
 			events = append(events, ev)
 		}
 	}
@@ -324,6 +326,75 @@ func labelsEqualIgnoring(a, b map[string]string, identity []string) bool {
 		return true
 	}
 	return check(a, b) && check(b, a)
+}
+
+// seriesFieldChanges lists non-identity label diffs and gauge-value diffs for updates.
+func seriesFieldChanges(pre, post seriesEntity, identityLabels []string) []FieldChange {
+	ignore := make(map[string]struct{}, len(identityLabels)+1)
+	for _, k := range identityLabels {
+		ignore[k] = struct{}{}
+	}
+	ignore["hostname"] = struct{}{}
+
+	keys := map[string]struct{}{}
+	for k := range pre.labels {
+		if _, skip := ignore[k]; !skip {
+			keys[k] = struct{}{}
+		}
+	}
+	for k := range post.labels {
+		if _, skip := ignore[k]; !skip {
+			keys[k] = struct{}{}
+		}
+	}
+	names := make([]string, 0, len(keys))
+	for k := range keys {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+
+	var out []FieldChange
+	for _, k := range names {
+		before := pre.labels[k]
+		after := post.labels[k]
+		if before == after {
+			continue
+		}
+		out = append(out, FieldChange{Field: k, Before: before, After: after})
+	}
+	if pre.value != post.value {
+		out = append(out, FieldChange{
+			Field:  "value",
+			Before: stripValuePrefix(pre.value),
+			After:  stripValuePrefix(post.value),
+		})
+	}
+	return out
+}
+
+func stripValuePrefix(v string) string {
+	if strings.HasPrefix(v, "i:") || strings.HasPrefix(v, "f:") {
+		return v[2:]
+	}
+	return v
+}
+
+func appendChangeDetails(summary string, changes []FieldChange) string {
+	if len(changes) == 0 {
+		return summary
+	}
+	parts := make([]string, 0, len(changes))
+	for _, c := range changes {
+		switch {
+		case c.Before == "" && c.After != "":
+			parts = append(parts, fmt.Sprintf("%s=%s", c.Field, c.After))
+		case c.Before != "" && c.After == "":
+			parts = append(parts, fmt.Sprintf("%s cleared (was %s)", c.Field, c.Before))
+		default:
+			parts = append(parts, fmt.Sprintf("%s %s → %s", c.Field, c.Before, c.After))
+		}
+	}
+	return summary + ": " + strings.Join(parts, ", ")
 }
 
 func firstNonEmpty(vals ...string) string {

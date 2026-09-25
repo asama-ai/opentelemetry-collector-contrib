@@ -65,6 +65,23 @@ func TestExpandMemoryUpdate(t *testing.T) {
 	require.Equal(t, "update", events[0].Action)
 	require.Equal(t, "Memory", events[0].EntityType)
 	require.Equal(t, "B11", events[0].EntityName)
+	require.Equal(t, []FieldChange{{Field: "size_bytes", Before: "1", After: "2"}}, events[0].Changes)
+	require.Contains(t, events[0].Summary, "size_bytes 1 → 2")
+}
+
+func TestExpandMDMemberSlotUpdate(t *testing.T) {
+	pre := MetricSnapshot{Series: []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "nvme3n1", "slot": "3", "serial_number": "J9009826"}, Value: 1},
+	}}
+	post := MetricSnapshot{Series: []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "nvme3n1", "slot": "none", "serial_number": "J9009826"}, Value: 1},
+	}}
+	events := expandEvents("asama-test-02", "node_md_member_info", pre, post)
+	require.Len(t, events, 1)
+	require.Equal(t, "update", events[0].Action)
+	require.Equal(t, []FieldChange{{Field: "slot", Before: "3", After: "none"}}, events[0].Changes)
+	require.Equal(t, "Updated RAID member nvme3n1 on md0: slot 3 → none", events[0].Summary)
+	require.Equal(t, "none", events[0].Payload["slot"])
 }
 
 func TestExpandUnchangedIdentityNoEvent(t *testing.T) {

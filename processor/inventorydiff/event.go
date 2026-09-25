@@ -16,10 +16,18 @@ type InventoryEvent struct {
 	IdentityKeys map[string]string `json:"identity_keys"` // leaf node props (no hostname assumption long-term)
 	Payload      map[string]string `json:"payload,omitempty"`
 	Topology     []BoundPathHop    `json:"topology,omitempty"` // A→B→C→D walk to the leaf
+	Changes      []FieldChange     `json:"changes,omitempty"`  // label/value diffs for update
 	Context      map[string]any    `json:"context,omitempty"`
 	KgOps        []KgOp            `json:"kg_ops,omitempty"`
 	Metric       string            `json:"metric"`
 	ObservedAt   string            `json:"observed_at,omitempty"`
+}
+
+// FieldChange is one label or gauge-value difference on an update event.
+type FieldChange struct {
+	Field  string `json:"field"`
+	Before string `json:"before"`
+	After  string `json:"after"`
 }
 
 // BoundPathHop is one resolved step of Topology for this event.

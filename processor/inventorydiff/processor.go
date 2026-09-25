@@ -28,6 +28,7 @@ const (
 	attrIdentityKeys     = "identity_keys"
 	attrPayload          = "payload"
 	attrTopology         = "topology"
+	attrChanges          = "changes"
 	attrKgOps            = "kg_ops"
 	attrObservedAt       = "observed_at"
 )
@@ -188,6 +189,9 @@ func (p *inventoryDiffProcessor) emitChangelog(
 		}
 		if len(ev.Topology) > 0 {
 			attrs.PutStr(attrTopology, mustJSON(ev.Topology))
+		}
+		if len(ev.Changes) > 0 {
+			attrs.PutStr(attrChanges, mustJSON(ev.Changes))
 		}
 		if len(ev.KgOps) > 0 {
 			attrs.PutStr(attrKgOps, mustJSON(ev.KgOps))

@@ -67,10 +67,12 @@ fields only** — metric→node mapping stays in `metric_map.go` and is not stor
 | `identity_keys` | JSON MERGE keys for the leaf node |
 | `payload` | JSON props to set on the node |
 | `topology` | JSON path hops Device → … → leaf |
+| `changes` | JSON field diffs on update (`field` / `before` / `after`) |
 | `kg_ops` | JSON targeted graph ops (edges) |
 | `observed_at` | Observation time |
 
-Example RAID member remove summary: `Removed nvme0n1 from RAID md0`.
+Example RAID member fail: `Updated RAID member nvme3n1 on md0: slot 3 → none`.  
+Example RAID member remove: `Removed nvme0n1 from RAID md0`.
 
 ## Component sync (optional)
 

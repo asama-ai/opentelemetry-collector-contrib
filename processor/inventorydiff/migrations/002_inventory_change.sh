@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS ${CLICKHOUSE_DB}.inventory_change ON CLUSTER ${CLICKH
     IdentityKeys String DEFAULT LogAttributes['identity_keys'] CODEC(ZSTD(1)),
     Payload String DEFAULT LogAttributes['payload'] CODEC(ZSTD(1)),
     Topology String DEFAULT LogAttributes['topology'] CODEC(ZSTD(1)),
+    Changes String DEFAULT LogAttributes['changes'] CODEC(ZSTD(1)),
     KgOps String DEFAULT LogAttributes['kg_ops'] CODEC(ZSTD(1)),
     RequestId String DEFAULT LogAttributes['request_id'] CODEC(ZSTD(1)),
     ObservedAt DateTime64(9) DEFAULT parseDateTime64BestEffortOrZero(LogAttributes['observed_at']) CODEC(ZSTD(1)),
