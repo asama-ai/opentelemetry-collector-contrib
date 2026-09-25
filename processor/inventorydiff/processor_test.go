@@ -38,6 +38,16 @@ func (c *captureSender) count() int {
 	return len(c.logs)
 }
 
+func (c *captureSender) recordCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, ld := range c.logs {
+		n += ld.LogRecordCount()
+	}
+	return n
+}
+
 func testProcessor(t *testing.T, metrics []string, sender changelogSender) *inventoryDiffProcessor {
 	t.Helper()
 	cfg := &Config{
@@ -80,9 +90,9 @@ func gaugeMetrics(hostname, name string, series []SeriesPoint) pmetric.Metrics {
 
 func TestSeedNoEvent(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
-	md := gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	md := gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	})
 	out, err := p.processMetrics(context.Background(), md)
 	require.NoError(t, err)
@@ -92,11 +102,11 @@ func TestSeedNoEvent(t *testing.T) {
 
 func TestNoChangeNoEvent(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
 	series := []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	}
-	md := gaugeMetrics("host-a", "node_md_member_state", series)
+	md := gaugeMetrics("host-a", "node_md_member_info", series)
 	_, err := p.processMetrics(context.Background(), md)
 	require.NoError(t, err)
 	_, err = p.processMetrics(context.Background(), md)
@@ -106,84 +116,99 @@ func TestNoChangeNoEvent(t *testing.T) {
 
 func TestValueChangeEmitsEvent(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_bonding_active"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_bonding_active", []SeriesPoint{
-		{Labels: map[string]string{"master": "bond0"}, Value: 2},
+	p := testProcessor(t, []string{"node_md_array_size_bytes"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_array_size_bytes", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "md0"}, Value: 2},
 	}))
 	require.NoError(t, err)
-	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_bonding_active", []SeriesPoint{
-		{Labels: map[string]string{"master": "bond0"}, Value: 1},
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_array_size_bytes", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "md0"}, Value: 1},
 	}))
 	require.NoError(t, err)
 	require.Equal(t, 1, cap.count())
 	attrs := lastAttrs(t, cap)
 	require.Equal(t, "update", attrs[attrAction])
-	require.Equal(t, "node_bonding_active", attrs[attrMetric])
-	require.Contains(t, attrs[attrPrechangeData], `"value":2`)
-	require.Contains(t, attrs[attrPostchangeData], `"value":1`)
+	require.Equal(t, "storage", attrs[attrComponent])
+	require.Equal(t, "RAID", attrs[attrEntityType])
+	require.Equal(t, "md0", attrs[attrEntityName])
 	require.NotEmpty(t, attrs[attrRequestID])
+	require.NotEmpty(t, attrs[attrSummary])
+	require.NotEmpty(t, attrs[attrIdentityKeys])
+	require.NotEmpty(t, attrs[attrTopology])
+	_, hasMetric := attrs["metric"]
+	require.False(t, hasMetric)
+	_, hasContext := attrs["context"]
+	require.False(t, hasContext)
 }
 
 func TestLabelChangeEmitsEvent(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
 		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
 	}))
 	require.NoError(t, err)
-	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
 		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "faulty"}, Value: 1},
 	}))
 	require.NoError(t, err)
 	require.Equal(t, 1, cap.count())
 	attrs := lastAttrs(t, cap)
 	require.Equal(t, "update", attrs[attrAction])
-	require.Contains(t, attrs[attrPrechangeData], "in_sync")
-	require.Contains(t, attrs[attrPostchangeData], "faulty")
+	require.Equal(t, "OsDisk", attrs[attrEntityType])
+	require.Equal(t, "sda", attrs[attrEntityName])
+	require.Contains(t, attrs[attrSummary], "sda")
 }
 
 func TestSeriesAddedEmitsEvent(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	}))
 	require.NoError(t, err)
-	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
-		{Labels: map[string]string{"array": "md0", "device": "sdc", "state": "spare"}, Value: 1},
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
+		{Labels: map[string]string{"array": "md0", "device": "sdc"}, Value: 1},
 	}))
 	require.NoError(t, err)
 	require.Equal(t, 1, cap.count())
+	require.Equal(t, 1, cap.recordCount())
 	attrs := lastAttrs(t, cap)
-	require.Equal(t, "update", attrs[attrAction])
-	require.Contains(t, attrs[attrPostchangeData], "sdc")
+	require.Equal(t, "create", attrs[attrAction])
+	require.Equal(t, "sdc", attrs[attrEntityName])
+	require.Contains(t, attrs[attrSummary], "RAID md0")
+	require.Contains(t, attrs[attrKgOps], "IN_RAID")
 }
 
 func TestSeriesRemovedEmitsEvent(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
-		{Labels: map[string]string{"array": "md0", "device": "sdb", "state": "in_sync"}, Value: 1},
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
+		{Labels: map[string]string{"array": "md0", "device": "sdb"}, Value: 1},
 	}))
 	require.NoError(t, err)
-	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	}))
 	require.NoError(t, err)
 	require.Equal(t, 1, cap.count())
+	attrs := lastAttrs(t, cap)
+	require.Equal(t, "remove", attrs[attrAction])
+	require.Equal(t, "sdb", attrs[attrEntityName])
+	require.Contains(t, attrs[attrSummary], "Removed sdb from RAID md0")
+	require.Contains(t, attrs[attrKgOps], "HAS_OS_DISK")
 }
 
 func TestMetricAbsentFromBatchSkipped(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	}))
 	require.NoError(t, err)
 
-	// Host still present, watched metric not in this batch (e.g. storage/health) → no event.
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
 	rm.Resource().Attributes().PutStr("hostname", "host-a")
@@ -195,34 +220,32 @@ func TestMetricAbsentFromBatchSkipped(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, cap.count())
 
-	// Same series again later → still no event (cache unchanged).
-	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	}))
 	require.NoError(t, err)
 	require.Equal(t, 0, cap.count())
 }
 
-func TestMetricPresentEmptySeriesEmitsDelete(t *testing.T) {
+func TestMetricPresentEmptySeriesEmitsRemove(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"node_md_member_state"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", []SeriesPoint{
-		{Labels: map[string]string{"array": "md0", "device": "sda", "state": "in_sync"}, Value: 1},
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", []SeriesPoint{
+		{Labels: map[string]string{"array": "md0", "device": "sda"}, Value: 1},
 	}))
 	require.NoError(t, err)
 
-	// Metric name present with zero datapoints → real empty snapshot → delete.
-	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_state", nil))
+	_, err = p.processMetrics(context.Background(), gaugeMetrics("host-a", "node_md_member_info", nil))
 	require.NoError(t, err)
 	require.Equal(t, 1, cap.count())
 	attrs := lastAttrs(t, cap)
-	require.Equal(t, "delete", attrs[attrAction])
-	require.Contains(t, attrs[attrPostchangeData], `"series":[]`)
+	require.Equal(t, "remove", attrs[attrAction])
+	require.Equal(t, "sda", attrs[attrEntityName])
 }
 
 func TestUnlistedMetricIgnored(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"watched_metric"}, cap)
+	p := testProcessor(t, []string{"node_md_member_info"}, cap)
 	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "other_metric", []SeriesPoint{
 		{Labels: map[string]string{"x": "1"}, Value: 1},
 	}))
@@ -236,11 +259,11 @@ func TestUnlistedMetricIgnored(t *testing.T) {
 
 func TestChangelogFailureStillForwardsMetrics(t *testing.T) {
 	cap := &captureSender{err: context.DeadlineExceeded}
-	p := testProcessor(t, []string{"m"}, cap)
-	md1 := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 1}})
+	p := testProcessor(t, []string{"dmidecode_memory_info"}, cap)
+	md1 := gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{{Labels: map[string]string{"locator": "B11"}, Value: 1}})
 	_, err := p.processMetrics(context.Background(), md1)
 	require.NoError(t, err)
-	md2 := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 2}})
+	md2 := gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{{Labels: map[string]string{"locator": "B11"}, Value: 2}})
 	out, err := p.processMetrics(context.Background(), md2)
 	require.NoError(t, err)
 	require.Equal(t, 1, out.MetricCount())
@@ -273,7 +296,9 @@ func lastAttrs(t *testing.T, c *captureSender) map[string]string {
 	defer c.mu.Unlock()
 	require.NotEmpty(t, c.logs)
 	ld := c.logs[len(c.logs)-1]
-	lr := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+	recs := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Greater(t, recs.Len(), 0)
+	lr := recs.At(recs.Len() - 1)
 	out := map[string]string{}
 	lr.Attributes().Range(func(k string, v pcommon.Value) bool {
 		out[k] = v.Str()
@@ -284,18 +309,21 @@ func lastAttrs(t *testing.T, c *captureSender) map[string]string {
 
 func TestConfigValidate(t *testing.T) {
 	require.Error(t, (&Config{}).Validate())
-	require.Error(t, (&Config{Metrics: []string{"m"}}).Validate())
+	require.Error(t, (&Config{Metrics: []string{"unknown_metric"}, Changelog: ChangelogExport{Endpoint: "http://x"}}).Validate())
 	require.NoError(t, (&Config{
-		Metrics:   []string{"m"},
+		Changelog: ChangelogExport{Endpoint: "http://x"},
+	}).Validate())
+	require.NoError(t, (&Config{
+		Metrics:   []string{"node_md_member_info"},
 		Changelog: ChangelogExport{Endpoint: "http://x"},
 	}).Validate())
 	require.Error(t, (&Config{
-		Metrics:       []string{"m"},
+		Metrics:       []string{"node_md_member_info"},
 		Changelog:     ChangelogExport{Endpoint: "http://x"},
 		ComponentSync: &ComponentSyncConfig{Tenant: "t"},
 	}).Validate())
 	require.NoError(t, (&Config{
-		Metrics:   []string{"m"},
+		Metrics:   []string{"node_md_member_info"},
 		Changelog: ChangelogExport{Endpoint: "http://x"},
 		ComponentSync: &ComponentSyncConfig{
 			TemporalAddress: "localhost:7233",
@@ -303,7 +331,7 @@ func TestConfigValidate(t *testing.T) {
 		},
 	}).Validate())
 	require.Error(t, (&Config{
-		Metrics:   []string{"m"},
+		Metrics:   []string{"node_md_member_info"},
 		Changelog: ChangelogExport{Endpoint: "localhost:4318"},
 	}).Validate())
 }
@@ -352,6 +380,7 @@ func TestComponentSyncTriggerOnChange(t *testing.T) {
 
 	waitComponentSync(t, sync.done)
 	require.Equal(t, 1, cap.count())
+	require.Equal(t, 2, cap.recordCount())
 	require.Equal(t, 1, sync.count())
 	require.Equal(t, "host-a", sync.calls[0].hostname)
 	require.Equal(t, "node_md_member_info", sync.calls[0].metric)
@@ -361,13 +390,13 @@ func TestComponentSyncTriggerOnChange(t *testing.T) {
 func TestComponentSyncFailureStillForwardsMetrics(t *testing.T) {
 	cap := &captureSender{}
 	sync := &captureComponentSyncStarter{err: io.EOF, done: make(chan struct{}, 1)}
-	p := testProcessor(t, []string{"m"}, cap)
+	p := testProcessor(t, []string{"dmidecode_memory_info"}, cap)
 	p.componentSync = sync
 
-	md1 := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 1}})
+	md1 := gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{{Labels: map[string]string{"locator": "B11"}, Value: 1}})
 	_, err := p.processMetrics(context.Background(), md1)
 	require.NoError(t, err)
-	md2 := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 2}})
+	md2 := gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{{Labels: map[string]string{"locator": "B11"}, Value: 2}})
 	out, err := p.processMetrics(context.Background(), md2)
 	require.NoError(t, err)
 	waitComponentSync(t, sync.done)
@@ -401,9 +430,9 @@ func TestSeriesKeyDoesNotCollide(t *testing.T) {
 func TestExactIntValuesStayDistinct(t *testing.T) {
 	const hi int64 = 9007199254740993
 	const lo int64 = 9007199254740992
-	sa, ok := snapshotFromMetrics(intGauge("host-a", "m", hi), "host-a", "m", time.Now())
+	sa, ok := snapshotFromMetrics(intGauge("host-a", "dmidecode_memory_info", hi), "host-a", "dmidecode_memory_info", time.Now())
 	require.True(t, ok)
-	sb, ok := snapshotFromMetrics(intGauge("host-a", "m", lo), "host-a", "m", time.Now())
+	sb, ok := snapshotFromMetrics(intGauge("host-a", "dmidecode_memory_info", lo), "host-a", "dmidecode_memory_info", time.Now())
 	require.True(t, ok)
 	require.False(t, compareSnapshots(sa, sb))
 	require.Contains(t, snapshotToJSON(sa), "9007199254740993")
@@ -411,9 +440,9 @@ func TestExactIntValuesStayDistinct(t *testing.T) {
 
 func TestHistogramDoesNotEmitDelete(t *testing.T) {
 	cap := &captureSender{}
-	p := testProcessor(t, []string{"m"}, cap)
-	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "m", []SeriesPoint{
-		{Labels: map[string]string{"a": "1"}, Value: 1},
+	p := testProcessor(t, []string{"dmidecode_memory_info"}, cap)
+	_, err := p.processMetrics(context.Background(), gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{
+		{Labels: map[string]string{"locator": "B11"}, Value: 1},
 	}))
 	require.NoError(t, err)
 
@@ -421,7 +450,7 @@ func TestHistogramDoesNotEmitDelete(t *testing.T) {
 	rm := md.ResourceMetrics().AppendEmpty()
 	rm.Resource().Attributes().PutStr("hostname", "host-a")
 	m := rm.ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
-	m.SetName("m")
+	m.SetName("dmidecode_memory_info")
 	m.SetEmptyHistogram().DataPoints().AppendEmpty()
 	_, err = p.processMetrics(context.Background(), md)
 	require.NoError(t, err)
@@ -431,13 +460,13 @@ func TestHistogramDoesNotEmitDelete(t *testing.T) {
 func TestChangelogFailureRetriesAndSkipsSync(t *testing.T) {
 	cap := &captureSender{err: io.EOF}
 	syncer := &captureComponentSyncStarter{done: make(chan struct{}, 1)}
-	p := testProcessor(t, []string{"m"}, cap)
+	p := testProcessor(t, []string{"dmidecode_memory_info"}, cap)
 	p.componentSync = syncer
 
-	base := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 1}})
+	base := gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{{Labels: map[string]string{"locator": "B11"}, Value: 1}})
 	_, err := p.processMetrics(context.Background(), base)
 	require.NoError(t, err)
-	changed := gaugeMetrics("host-a", "m", []SeriesPoint{{Labels: map[string]string{"a": "1"}, Value: 2}})
+	changed := gaugeMetrics("host-a", "dmidecode_memory_info", []SeriesPoint{{Labels: map[string]string{"locator": "B11"}, Value: 2}})
 	_, err = p.processMetrics(context.Background(), changed)
 	require.NoError(t, err)
 	_, err = p.processMetrics(context.Background(), changed)

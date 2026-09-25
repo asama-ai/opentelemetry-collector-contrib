@@ -1,31 +1,21 @@
 # inventorydiff processor
 
-Watches configured metric names on the **collector VM** otel-collector metrics pipeline.
+Watches inventory metrics on the **collector VM** otel-collector metrics pipeline.
 Keeps an in-memory last snapshot per `(hostname, metric)` (deep-copied on write).
-When the snapshot changes, emits an OTLP log event to `changelog.endpoint`.
+When the snapshot changes, **expands** the series diff into UI/KG-ready events and
+emits one OTLP log record per entity change to `changelog.endpoint`.
 Metrics are always forwarded unchanged (fail-open if changelog export fails).
+
+The metric → component / entity / identity-label map lives in code
+(`metric_map.go`). Config `metrics` is an optional allow-list; omit it to watch
+every registered metric.
 
 ## Config
 
 ```yaml
 processors:
   inventorydiff:
-    metrics:
-      # storage / MD
-      - node_md_member_info
-      - node_md_array_info
-      - node_md_array_size_bytes
-      # storage / block + vendor RAID
-      - node_block_device_info
-      - hwraid_vd_info
-      - hwraid_pd_info
-      # network
-      - node_network_interface_info
-      - node_ethtool_link_info
-      - node_pcie_adapter_info
-      # compute
-      - dmidecode_memory_info
-      - dmidecode_processor_info
+    # metrics: optional allow-list; omit to watch every metric in metric_map.go
     changelog:
       endpoint: https://YOUR_PLATFORM_HOST/api/otel
       headers:
@@ -51,64 +41,60 @@ Rebuild the collector image/binary from `cmd/otel-collector/builder-config.yaml`
 
 ## Change detection
 
-Compares label sets + values only (timestamps ignored):
+Compares label sets + values only (timestamps ignored) to decide *whether* to emit.
+Expansion then diffs by **identity labels** per metric:
 
-- series added / removed
-- label change
-- value change
-- watched metric present with zero series → `action=delete`, empty post series
+- series identity gone → `action=remove`
+- series identity new → `action=create`
+- same identity, value or other labels changed → `action=update`
 
 Watched metrics **absent** from a batch are skipped (partial domain×tier OTLP pushes must not look like deletes).
 
-## Event
+## Event (UI / KG)
 
-OTLP log with `service.name=asama-inventory-changelog` and attributes:
+OTLP log with `service.name=asama-inventory-changelog`. Attributes are **KG-apply
+fields only** — metric→node mapping stays in `metric_map.go` and is not stored.
 
-- `request_id`, `action`, `hostname`, `metric`
-- `prechange_data`, `postchange_data` (JSON snapshots)
-- `pre_observed_at`, `post_observed_at`
+| Attribute | Meaning |
+|-----------|---------|
+| `request_id` | Shared across all entity events from one change batch |
+| `hostname` | Device root (until Device matching is hostname-free) |
+| `component` | storage / network / memory / … (component sync + UI filter) |
+| `action` | create / update / remove |
+| `entity_type` | RAID, OsDisk, Memory, NIC, … |
+| `entity_name` | md0, nvme0n1, B11, … |
+| `summary` | Human-readable UI string |
+| `identity_keys` | JSON MERGE keys for the leaf node |
+| `payload` | JSON props to set on the node |
+| `topology` | JSON path hops Device → … → leaf |
+| `kg_ops` | JSON targeted graph ops (edges) |
+| `observed_at` | Observation time |
+
+Example RAID member remove summary: `Removed nvme0n1 from RAID md0`.
 
 ## Component sync (optional)
 
-When `component_sync` is set, each changelog also starts `ComponentSyncWorkflow` on Temporal.
-The collector acts as a Temporal **client**; the CISS worker on `task_queue` runs the workflow and activity.
+When `component_sync` is set, each successful changelog export also starts
+`ComponentSyncWorkflow` on Temporal (async, fail-open).
 
-Workflow input (JSON):
+Metric → component comes from `metric_map.go` (aligned with CISS component names).
 
-```json
-{"tenant":"nxtgen","hostname":"host-a","components":["storage"],"request_id":"..."}
-```
+## ClickHouse
 
-Metric → component mapping matches CISS:
-
-| Metrics | Component |
-|---------|-----------|
-| `node_md_*`, `node_block_device_info`, `hwraid_*`, … | `storage` |
-| `node_network_interface_info`, `node_ethtool_link_info`, `node_pcie_adapter_info` | `network` |
-| `dmidecode_memory_info` | `memory` |
-| `dmidecode_processor_info` | `processor` |
-| `node_filesystem_*` | `nfs` |
-
-Workflow ID: `{hostname}/component-sync/{components}/{tenant}` (sanitized, with a short hash so distinct tenants cannot collide) and terminate-if-running reuse.
-
-Requires `ciss worker` polling the same task queue. Temporal start is async and fail-open.
-
-## ClickHouse + platform routing
-
-**1. Recreate table** (logs-shaped, like `otel_configfiles`):
+**Deprecated:** `otel.identity_change` (raw pre/post dumps). Use migration `002`.
 
 ```bash
 export CLICKHOUSE_HOST=YOUR_CLICKHOUSE_HOST
-./processor/inventorydiff/migrations/001_identity_change.sh
+./processor/inventorydiff/migrations/002_inventory_change.sh
 ```
 
-**2. Platform `otel-exporter.yaml`** — add filter, exporter, pipeline; exclude from `logs/general` (same pattern as configfiles). See README section below / deploy notes.
-
-**3. Restart** `otel-exporter`, then query:
+Platform `otel-exporter.yaml` should route `asama-inventory-changelog` into
+`otel.inventory_change` (same pattern as configfiles).
 
 ```sql
-SELECT Timestamp, Hostname, Metric, Action, RequestId, PrechangeData, PostchangeData
-FROM otel.identity_change
+SELECT Timestamp, Hostname, Component, Action, EntityType, EntityName, Summary,
+       IdentityKeys, Payload, Topology, KgOps, RequestId
+FROM otel.inventory_change
 ORDER BY Timestamp DESC
 LIMIT 20
 ```

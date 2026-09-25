@@ -21,11 +21,15 @@ const (
 	attrRequestID        = "request_id"
 	attrAction           = "action"
 	attrHostname         = "hostname"
-	attrMetric           = "metric"
-	attrPrechangeData    = "prechange_data"
-	attrPostchangeData   = "postchange_data"
-	attrPreObservedAt    = "pre_observed_at"
-	attrPostObservedAt   = "post_observed_at"
+	attrComponent        = "component"
+	attrEntityType       = "entity_type"
+	attrEntityName       = "entity_name"
+	attrSummary          = "summary"
+	attrIdentityKeys     = "identity_keys"
+	attrPayload          = "payload"
+	attrTopology         = "topology"
+	attrKgOps            = "kg_ops"
+	attrObservedAt       = "observed_at"
 )
 
 type inventoryDiffProcessor struct {
@@ -84,7 +88,7 @@ func (p *inventoryDiffProcessor) shutdown(context.Context) error {
 	return nil
 }
 
-// processMetrics compares watched metrics to cached snapshots and emits changelog events.
+// processMetrics compares watched metrics to cached snapshots and emits inventory events.
 // Metrics are always forwarded unchanged (fail-open on changelog errors).
 // Watched metrics absent from this batch are skipped (partial domain×tier pushes must not
 // look like deletes).
@@ -150,35 +154,48 @@ func (p *inventoryDiffProcessor) emitChangelog(
 	if p.sender == nil {
 		return nil
 	}
-	requestID := uuid.NewString()
-	action := "update"
-	if len(pre.Series) > 0 && len(post.Series) == 0 {
-		action = "delete"
-	} else if len(pre.Series) == 0 && len(post.Series) > 0 {
-		action = "create"
+	events := expandEvents(hostname, metric, pre, post)
+	if len(events) == 0 {
+		return nil
 	}
+	requestID := uuid.NewString()
 
 	ld := plog.NewLogs()
 	rl := ld.ResourceLogs().AppendEmpty()
 	rl.Resource().Attributes().PutStr("service.name", serviceNameChangelog)
 	rl.Resource().Attributes().PutStr("hostname", hostname)
 	sl := rl.ScopeLogs().AppendEmpty()
-	lr := sl.LogRecords().AppendEmpty()
 	ts := pcommon.NewTimestampFromTime(p.now())
-	lr.SetTimestamp(ts)
-	lr.SetObservedTimestamp(ts)
-	lr.SetSeverityNumber(plog.SeverityNumberInfo)
-	lr.SetSeverityText("INFO")
-	lr.Body().SetStr("metric identity changed")
-	attrs := lr.Attributes()
-	attrs.PutStr(attrRequestID, requestID)
-	attrs.PutStr(attrAction, action)
-	attrs.PutStr(attrHostname, hostname)
-	attrs.PutStr(attrMetric, metric)
-	attrs.PutStr(attrPrechangeData, snapshotToJSON(pre))
-	attrs.PutStr(attrPostchangeData, snapshotToJSON(post))
-	attrs.PutStr(attrPreObservedAt, pre.ObservedAt)
-	attrs.PutStr(attrPostObservedAt, post.ObservedAt)
+
+	for _, ev := range events {
+		lr := sl.LogRecords().AppendEmpty()
+		lr.SetTimestamp(ts)
+		lr.SetObservedTimestamp(ts)
+		lr.SetSeverityNumber(plog.SeverityNumberInfo)
+		lr.SetSeverityText("INFO")
+		lr.Body().SetStr(ev.Summary)
+		attrs := lr.Attributes()
+		attrs.PutStr(attrRequestID, requestID)
+		attrs.PutStr(attrAction, ev.Action)
+		attrs.PutStr(attrHostname, ev.Hostname)
+		attrs.PutStr(attrComponent, ev.Component)
+		attrs.PutStr(attrEntityType, ev.EntityType)
+		attrs.PutStr(attrEntityName, ev.EntityName)
+		attrs.PutStr(attrSummary, ev.Summary)
+		attrs.PutStr(attrIdentityKeys, mustJSON(ev.IdentityKeys))
+		if len(ev.Payload) > 0 {
+			attrs.PutStr(attrPayload, mustJSON(ev.Payload))
+		}
+		if len(ev.Topology) > 0 {
+			attrs.PutStr(attrTopology, mustJSON(ev.Topology))
+		}
+		if len(ev.KgOps) > 0 {
+			attrs.PutStr(attrKgOps, mustJSON(ev.KgOps))
+		}
+		if ev.ObservedAt != "" {
+			attrs.PutStr(attrObservedAt, ev.ObservedAt)
+		}
+	}
 
 	if err := p.sender.Send(ctx, ld); err != nil {
 		return err

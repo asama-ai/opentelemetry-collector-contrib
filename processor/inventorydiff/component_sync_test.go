@@ -14,13 +14,15 @@ func TestComponentsForMetric(t *testing.T) {
 	require.Equal(t, []string{"storage"}, componentsForMetric("node_md_member_info"))
 	require.Equal(t, []string{"storage"}, componentsForMetric("node_block_device_info"))
 	require.Equal(t, []string{"storage"}, componentsForMetric("hwraid_vd_info"))
-	require.Equal(t, []string{"network"}, componentsForMetric("node_network_interface_info"))
-	require.Equal(t, []string{"network"}, componentsForMetric("node_ethtool_link_info"))
-	require.Equal(t, []string{"network"}, componentsForMetric("node_pcie_adapter_info"))
+	require.Equal(t, []string{"network"}, componentsForMetric("node_nic_adapter_info"))
+	require.Equal(t, []string{"network"}, componentsForMetric("node_nic_port_info"))
 	require.Equal(t, []string{"memory"}, componentsForMetric("dmidecode_memory_info"))
+	require.Equal(t, []string{"memory"}, componentsForMetric("redfish_memory"))
 	require.Equal(t, []string{"processor"}, componentsForMetric("dmidecode_processor_info"))
-	require.Equal(t, []string{"nfs"}, componentsForMetric("node_filesystem_mountpoint_info"))
+	require.Equal(t, []string{"nfs"}, componentsForMetric("node_filesystem_mount_info"))
+	require.Equal(t, []string{"fan"}, componentsForMetric("redfish_thermal_fan_info"))
 	require.Nil(t, componentsForMetric("unknown_metric"))
+	require.Nil(t, componentsForMetric("node_network_interface_info"))
 }
 
 func TestComponentSyncWorkflowID(t *testing.T) {

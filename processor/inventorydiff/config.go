@@ -22,6 +22,7 @@ type ChangelogExport struct {
 
 // Config is the inventorydiff processor configuration.
 type Config struct {
+	// Metrics is an optional allow-list. Empty means all metrics in the code registry.
 	Metrics       []string             `mapstructure:"metrics"`
 	Changelog     ChangelogExport      `mapstructure:"changelog"`
 	ComponentSync *ComponentSyncConfig `mapstructure:"component_sync"`
@@ -33,17 +34,31 @@ func createDefaultConfig() component.Config {
 	}
 }
 
+// applyDefaults fills Metrics from the registry when unset.
+func (c *Config) applyDefaults() {
+	if c == nil {
+		return
+	}
+	if len(c.Metrics) == 0 {
+		c.Metrics = DefaultMetrics()
+	}
+}
+
 // Validate checks required fields.
 func (c *Config) Validate() error {
 	if c == nil {
 		return errors.New("config is nil")
 	}
+	c.applyDefaults()
 	if len(c.Metrics) == 0 {
 		return errors.New("metrics list must not be empty")
 	}
 	for i, m := range c.Metrics {
 		if m == "" {
 			return fmt.Errorf("metrics[%d] must not be empty", i)
+		}
+		if _, ok := Lookup(m); !ok {
+			return fmt.Errorf("metrics[%d] %q is not in the inventorydiff metric registry", i, m)
 		}
 	}
 	if err := validateChangelogEndpoint(c.Changelog.Endpoint); err != nil {
