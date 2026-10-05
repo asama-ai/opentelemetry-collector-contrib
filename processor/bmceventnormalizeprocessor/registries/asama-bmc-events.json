@@ -1,0 +1,1179 @@
+{
+  "@odata.type": "#MessageRegistry.v1_6_0.MessageRegistry",
+  "Id": "AsamaBmcEvents.1.0.0",
+  "Name": "Asama BMC Event Registry",
+  "Language": "en",
+  "Description": "Vendor-neutral BMC event registry for cross-vendor subscriptions",
+  "RegistryPrefix": "AsamaBmc",
+  "RegistryVersion": "1.0.0",
+  "OwningEntity": "Asama",
+  "Messages": {
+    "PowerPsuFailure": {
+      "Description": "A power supply unit has failed or is absent.",
+      "Message": "Power supply %1 has failed or is absent.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Replace the failed power supply unit.",
+      "Oem": {
+        "Asama": {
+          "Domain": "power",
+          "Component": "psu",
+          "Condition": "failure",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": true,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "power"
+          ],
+          "AsamaId": "power.psu.failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Power supply identifier or slot"
+      ]
+    },
+    "PowerRedundancyLost": {
+      "Description": "Power supply redundancy has been lost.",
+      "Message": "Power redundancy has been lost. %1",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Restore power supply redundancy.",
+      "Oem": {
+        "Asama": {
+          "Domain": "power",
+          "Component": "psu",
+          "Condition": "redundancy_lost",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "power",
+            "redundancy"
+          ],
+          "AsamaId": "power.redundancy.lost"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Affected power subsystem detail"
+      ]
+    },
+    "PowerInputLost": {
+      "Description": "AC or input power has been lost.",
+      "Message": "Input power has been lost. %1",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Check facility power and power cables.",
+      "Oem": {
+        "Asama": {
+          "Domain": "power",
+          "Component": "input",
+          "Condition": "lost",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "power"
+          ],
+          "AsamaId": "power.input.lost"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Power source or line detail"
+      ]
+    },
+    "ThermalThresholdCritical": {
+      "Description": "A temperature sensor crossed a critical or non-recoverable threshold.",
+      "Message": "Temperature sensor %1 crossed a critical or non-recoverable threshold.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Check cooling and ambient temperature.",
+      "Oem": {
+        "Asama": {
+          "Domain": "thermal",
+          "Component": "sensor",
+          "Condition": "threshold_critical",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "thermal",
+            "environmental"
+          ],
+          "AsamaId": "thermal.threshold.critical"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Sensor name or location"
+      ]
+    },
+    "ThermalThresholdWarning": {
+      "Description": "A temperature sensor crossed a warning threshold.",
+      "Message": "Temperature sensor %1 crossed a warning threshold.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Monitor cooling and ambient conditions.",
+      "Oem": {
+        "Asama": {
+          "Domain": "thermal",
+          "Component": "sensor",
+          "Condition": "threshold_warning",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "thermal",
+            "environmental"
+          ],
+          "AsamaId": "thermal.threshold.warning"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Sensor name or location"
+      ]
+    },
+    "ThermalShutdown": {
+      "Description": "Thermal protection initiated a system shutdown.",
+      "Message": "Thermal protection initiated a system shutdown. Cause: %1",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Resolve thermal condition before restarting.",
+      "Oem": {
+        "Asama": {
+          "Domain": "thermal",
+          "Component": "system",
+          "Condition": "shutdown",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "thermal",
+            "shutdown"
+          ],
+          "AsamaId": "thermal.shutdown"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Shutdown cause"
+      ]
+    },
+    "FanFailure": {
+      "Description": "A cooling fan has failed or is below minimum speed.",
+      "Message": "Fan %1 has failed or is below minimum speed.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Replace or reseat the failed fan.",
+      "Oem": {
+        "Asama": {
+          "Domain": "fan",
+          "Component": "fan",
+          "Condition": "failure",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "cooling"
+          ],
+          "AsamaId": "fan.failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Fan identifier or slot"
+      ]
+    },
+    "FanRedundancyLost": {
+      "Description": "Cooling fan redundancy has been lost.",
+      "Message": "Cooling fan redundancy has been lost. %1",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Restore fan redundancy.",
+      "Oem": {
+        "Asama": {
+          "Domain": "fan",
+          "Component": "fan",
+          "Condition": "redundancy_lost",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "cooling",
+            "redundancy"
+          ],
+          "AsamaId": "fan.redundancy.lost"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Cooling subsystem detail"
+      ]
+    },
+    "ProcessorThermalTrip": {
+      "Description": "A processor exceeded its thermal limit and was shut down.",
+      "Message": "Thermal trip (over-temperature) on %1.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Check cooling and heatsink installation.",
+      "Oem": {
+        "Asama": {
+          "Domain": "processor",
+          "Component": "cpu",
+          "Condition": "thermal_trip",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "processor",
+            "thermal"
+          ],
+          "AsamaId": "processor.thermal.trip"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Processor identifier (e.g. CPU 1, Processor 1)"
+      ]
+    },
+    "ProcessorFailure": {
+      "Description": "A processor failed initialization, BIST, or POST.",
+      "Message": "%1 failed initialization, BIST, or POST.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Reseat processor or contact support.",
+      "Oem": {
+        "Asama": {
+          "Domain": "processor",
+          "Component": "cpu",
+          "Condition": "failure",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "processor"
+          ],
+          "AsamaId": "processor.failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Processor identifier"
+      ]
+    },
+    "MemoryUncorrectableError": {
+      "Description": "An uncorrectable memory error was detected.",
+      "Message": "Uncorrectable memory error detected on %1.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Replace the affected memory module.",
+      "Oem": {
+        "Asama": {
+          "Domain": "memory",
+          "Component": "dimm",
+          "Condition": "uncorrectable_error",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": true,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "memory"
+          ],
+          "AsamaId": "memory.uncorrectable_error"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "DIMM location or identifier"
+      ]
+    },
+    "MemoryCorrectableError": {
+      "Description": "A correctable memory error exceeded threshold.",
+      "Message": "Correctable memory error threshold exceeded on %1.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Monitor memory errors; replace DIMM if persistent.",
+      "Oem": {
+        "Asama": {
+          "Domain": "memory",
+          "Component": "dimm",
+          "Condition": "correctable_error",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "memory"
+          ],
+          "AsamaId": "memory.correctable_error"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "DIMM location or identifier"
+      ]
+    },
+    "MemoryDimmFailure": {
+      "Description": "A memory module failed or is missing.",
+      "Message": "Memory module %1 failed or is missing.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Reseat or replace the memory module.",
+      "Oem": {
+        "Asama": {
+          "Domain": "memory",
+          "Component": "dimm",
+          "Condition": "failure",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": true,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "memory"
+          ],
+          "AsamaId": "memory.dimm.failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "DIMM location or identifier"
+      ]
+    },
+    "StorageDriveFailure": {
+      "Description": "A physical storage drive has failed.",
+      "Message": "Physical drive at location %1 has failed.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Replace the failed drive.",
+      "Oem": {
+        "Asama": {
+          "Domain": "storage",
+          "Component": "drive",
+          "Condition": "failure",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": true,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "storage",
+            "replacement"
+          ],
+          "AsamaId": "storage.drive.failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Drive bay or location"
+      ]
+    },
+    "StorageDrivePredictiveFailure": {
+      "Description": "A drive reported predictive failure or SMART warning.",
+      "Message": "Drive at location %1 reported predictive failure or SMART warning.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Schedule drive replacement.",
+      "Oem": {
+        "Asama": {
+          "Domain": "storage",
+          "Component": "drive",
+          "Condition": "predictive_failure",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "storage",
+            "predictive"
+          ],
+          "AsamaId": "storage.drive.predictive_failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Drive bay or location"
+      ]
+    },
+    "StorageArrayDegraded": {
+      "Description": "A RAID or storage array is in a degraded state.",
+      "Message": "Storage array %1 is in a degraded state.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Restore array redundancy.",
+      "Oem": {
+        "Asama": {
+          "Domain": "storage",
+          "Component": "array",
+          "Condition": "degraded",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "storage",
+            "raid"
+          ],
+          "AsamaId": "storage.array.degraded"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Array or volume identifier"
+      ]
+    },
+    "StorageControllerFailure": {
+      "Description": "A storage controller has failed.",
+      "Message": "Storage controller %1 has failed.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Replace or reset the storage controller.",
+      "Oem": {
+        "Asama": {
+          "Domain": "storage",
+          "Component": "controller",
+          "Condition": "failure",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "hardware",
+            "storage"
+          ],
+          "AsamaId": "storage.controller.failure"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Controller identifier"
+      ]
+    },
+    "NetworkLinkDown": {
+      "Description": "A network link is down or disconnected.",
+      "Message": "Network link %1 is down or disconnected.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Check cable and switch connectivity.",
+      "Oem": {
+        "Asama": {
+          "Domain": "network",
+          "Component": "link",
+          "Condition": "down",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "network"
+          ],
+          "AsamaId": "network.link.down"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "NIC or port identifier"
+      ]
+    },
+    "BmcNetworkChanged": {
+      "Description": "BMC network configuration was changed.",
+      "Message": "BMC network configuration changed: %1",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "bmc",
+          "Component": "network",
+          "Condition": "changed",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": true,
+          "Tags": [
+            "bmc",
+            "network",
+            "config"
+          ],
+          "AsamaId": "bmc.network.changed"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Change detail"
+      ]
+    },
+    "FirmwareUpdateCompleted": {
+      "Description": "A firmware update completed successfully.",
+      "Message": "Firmware update completed for %1.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "firmware",
+          "Component": "update",
+          "Condition": "completed",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "firmware"
+          ],
+          "AsamaId": "firmware.update.completed"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Component or image name"
+      ]
+    },
+    "FirmwareUpdateFailed": {
+      "Description": "A firmware update failed.",
+      "Message": "Firmware update failed for %1.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Retry firmware update or contact support.",
+      "Oem": {
+        "Asama": {
+          "Domain": "firmware",
+          "Component": "update",
+          "Condition": "failed",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "firmware"
+          ],
+          "AsamaId": "firmware.update.failed"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Component or image name"
+      ]
+    },
+    "SecurityConfigWeak": {
+      "Description": "A security configuration is in a risky or non-compliant state.",
+      "Message": "Security setting %1 is at risk. State: %2",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 2,
+      "Resolution": "Review and remediate the security configuration.",
+      "Oem": {
+        "Asama": {
+          "Domain": "security",
+          "Component": "config",
+          "Condition": "weak",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "security",
+            "compliance"
+          ],
+          "AsamaId": "security.config.weak"
+        }
+      },
+      "ParamTypes": [
+        "string",
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Setting name",
+        "Current state"
+      ]
+    },
+    "SecurityConfigOk": {
+      "Description": "A previously at-risk security configuration is now healthy.",
+      "Message": "Security setting %1 is now healthy. State: %2",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 2,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "security",
+          "Component": "config",
+          "Condition": "ok",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "deassert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "security",
+            "compliance"
+          ],
+          "AsamaId": "security.config.ok"
+        }
+      },
+      "ParamTypes": [
+        "string",
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Setting name",
+        "Current state"
+      ],
+      "ClearingLogic": {
+        "ClearsIf": "SameOriginOfCondition",
+        "ClearsMessage": [
+          "SecurityConfigWeak"
+        ]
+      }
+    },
+    "SecurityAuthFailure": {
+      "Description": "An authentication attempt failed.",
+      "Message": "Authentication failure for user %1 from %2.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 2,
+      "Resolution": "Review authentication logs.",
+      "Oem": {
+        "Asama": {
+          "Domain": "security",
+          "Component": "auth",
+          "Condition": "failure",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": true,
+          "Tags": [
+            "security",
+            "auth"
+          ],
+          "AsamaId": "security.auth.failure"
+        }
+      },
+      "ParamTypes": [
+        "string",
+        "string"
+      ],
+      "ArgDescriptions": [
+        "User or account",
+        "Source or method"
+      ]
+    },
+    "SystemPowerOn": {
+      "Description": "The system was powered on.",
+      "Message": "System %1 was powered on.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "system",
+          "Component": "power",
+          "Condition": "on",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "system",
+            "lifecycle"
+          ],
+          "AsamaId": "system.power.on"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "System identifier"
+      ]
+    },
+    "SystemPowerOff": {
+      "Description": "The system was powered off.",
+      "Message": "System %1 was powered off.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "system",
+          "Component": "power",
+          "Condition": "off",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "system",
+            "lifecycle"
+          ],
+          "AsamaId": "system.power.off"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "System identifier"
+      ]
+    },
+    "SystemPowerCycle": {
+      "Description": "A hard or soft power cycle was requested or completed.",
+      "Message": "Power cycle requested for system %1.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "system",
+          "Component": "power",
+          "Condition": "cycle",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "system",
+            "lifecycle"
+          ],
+          "AsamaId": "system.power.cycle"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "System identifier"
+      ]
+    },
+    "BmcHealthDegraded": {
+      "Description": "BMC or management processor health is degraded.",
+      "Message": "BMC health is degraded: %1",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Check BMC logs and restart if needed.",
+      "Oem": {
+        "Asama": {
+          "Domain": "bmc",
+          "Component": "health",
+          "Condition": "degraded",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "bmc",
+            "health"
+          ],
+          "AsamaId": "bmc.health.degraded"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Health detail"
+      ]
+    },
+    "TaskCompleted": {
+      "Description": "A background task completed successfully.",
+      "Message": "Task %1 completed successfully.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "task",
+          "Component": "task",
+          "Condition": "completed",
+          "SubscriptionPriority": "P4",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "task"
+          ],
+          "AsamaId": "task.completed"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Task identifier"
+      ]
+    },
+    "TaskFailed": {
+      "Description": "A background task failed or was aborted.",
+      "Message": "Task %1 failed or was aborted.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Review task logs and retry.",
+      "Oem": {
+        "Asama": {
+          "Domain": "task",
+          "Component": "task",
+          "Condition": "failed",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "task"
+          ],
+          "AsamaId": "task.failed"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Task identifier"
+      ]
+    },
+    "ResourceStatusCritical": {
+      "Description": "A managed resource health changed to critical.",
+      "Message": "Resource %1 health changed to critical.",
+      "Severity": "Critical",
+      "MessageSeverity": "Critical",
+      "NumberOfArgs": 1,
+      "Resolution": "Investigate resource health.",
+      "Oem": {
+        "Asama": {
+          "Domain": "resource",
+          "Component": "status",
+          "Condition": "critical",
+          "SubscriptionPriority": "P1",
+          "DefaultLifecycle": "assert",
+          "Serviceable": true,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "resource",
+            "health"
+          ],
+          "AsamaId": "resource.status.critical"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Resource identifier"
+      ]
+    },
+    "ResourceStatusWarning": {
+      "Description": "A managed resource health changed to warning.",
+      "Message": "Resource %1 health changed to warning.",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Monitor resource health.",
+      "Oem": {
+        "Asama": {
+          "Domain": "resource",
+          "Component": "status",
+          "Condition": "warning",
+          "SubscriptionPriority": "P2",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "resource",
+            "health"
+          ],
+          "AsamaId": "resource.status.warning"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Resource identifier"
+      ]
+    },
+    "ResourcePoweredOn": {
+      "Description": "A managed resource was powered on.",
+      "Message": "Resource %1 was powered on.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "resource",
+          "Component": "power",
+          "Condition": "on",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "resource",
+            "lifecycle"
+          ],
+          "AsamaId": "resource.powered_on"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Resource identifier"
+      ]
+    },
+    "ResourcePoweredOff": {
+      "Description": "A managed resource was powered off.",
+      "Message": "Resource %1 was powered off.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 1,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "resource",
+          "Component": "power",
+          "Condition": "off",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "resource",
+            "lifecycle"
+          ],
+          "AsamaId": "resource.powered_off"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Resource identifier"
+      ]
+    },
+    "RemoteSupportTransmitFailed": {
+      "Description": "Remote support or call-home transmission failed.",
+      "Message": "Remote support transmission failed: %1",
+      "Severity": "Warning",
+      "MessageSeverity": "Warning",
+      "NumberOfArgs": 1,
+      "Resolution": "Check remote support connectivity.",
+      "Oem": {
+        "Asama": {
+          "Domain": "remote_support",
+          "Component": "transmit",
+          "Condition": "failed",
+          "SubscriptionPriority": "P3",
+          "DefaultLifecycle": "assert",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": false,
+          "Tags": [
+            "remote_support"
+          ],
+          "AsamaId": "remote_support.transmit.failed"
+        }
+      },
+      "ParamTypes": [
+        "string"
+      ],
+      "ArgDescriptions": [
+        "Error detail"
+      ]
+    },
+    "AuditConfigChanged": {
+      "Description": "A BMC or system configuration was changed.",
+      "Message": "Configuration changed by %1: %2",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 2,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "audit",
+          "Component": "config",
+          "Condition": "changed",
+          "SubscriptionPriority": "P4",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": true,
+          "Tags": [
+            "audit",
+            "config"
+          ],
+          "AsamaId": "audit.config.changed"
+        }
+      },
+      "ParamTypes": [
+        "string",
+        "string"
+      ],
+      "ArgDescriptions": [
+        "User or process",
+        "Change detail"
+      ]
+    },
+    "AuditUserLogin": {
+      "Description": "A user logged in or out of the BMC.",
+      "Message": "User %1 login event from %2.",
+      "Severity": "OK",
+      "MessageSeverity": "OK",
+      "NumberOfArgs": 2,
+      "Resolution": "None.",
+      "Oem": {
+        "Asama": {
+          "Domain": "audit",
+          "Component": "user",
+          "Condition": "login",
+          "SubscriptionPriority": "P4",
+          "DefaultLifecycle": "info",
+          "Serviceable": false,
+          "CallHome": false,
+          "Audit": true,
+          "Tags": [
+            "audit",
+            "auth"
+          ],
+          "AsamaId": "audit.user.login"
+        }
+      },
+      "ParamTypes": [
+        "string",
+        "string"
+      ],
+      "ArgDescriptions": [
+        "User account",
+        "Source address"
+      ]
+    }
+  }
+}
