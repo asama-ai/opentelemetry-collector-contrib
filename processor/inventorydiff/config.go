@@ -6,6 +6,7 @@ package inventorydiff // import "github.com/open-telemetry/opentelemetry-collect
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,8 +22,9 @@ type ChangelogExport struct {
 
 // Config is the inventorydiff processor configuration.
 type Config struct {
-	Metrics   []string         `mapstructure:"metrics"`
-	Changelog ChangelogExport  `mapstructure:"changelog"`
+	// Metrics is an optional allow-list. Empty means all metrics in the code registry.
+	Metrics       []string             `mapstructure:"metrics"`
+	Changelog     ChangelogExport      `mapstructure:"changelog"`
 	ComponentSync *ComponentSyncConfig `mapstructure:"component_sync"`
 }
 
@@ -32,11 +34,22 @@ func createDefaultConfig() component.Config {
 	}
 }
 
+// applyDefaults fills Metrics from the registry when unset.
+func (c *Config) applyDefaults() {
+	if c == nil {
+		return
+	}
+	if len(c.Metrics) == 0 {
+		c.Metrics = DefaultMetrics()
+	}
+}
+
 // Validate checks required fields.
 func (c *Config) Validate() error {
 	if c == nil {
 		return errors.New("config is nil")
 	}
+	c.applyDefaults()
 	if len(c.Metrics) == 0 {
 		return errors.New("metrics list must not be empty")
 	}
@@ -44,9 +57,12 @@ func (c *Config) Validate() error {
 		if m == "" {
 			return fmt.Errorf("metrics[%d] must not be empty", i)
 		}
+		if _, ok := Lookup(m); !ok {
+			return fmt.Errorf("metrics[%d] %q is not in the inventorydiff metric registry", i, m)
+		}
 	}
-	if c.Changelog.Endpoint == "" {
-		return errors.New("changelog.endpoint is required")
+	if err := validateChangelogEndpoint(c.Changelog.Endpoint); err != nil {
+		return err
 	}
 	if c.ComponentSync != nil {
 		if strings.TrimSpace(c.ComponentSync.TemporalAddress) == "" {
@@ -55,6 +71,14 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(c.ComponentSync.Tenant) == "" {
 			return errors.New("component_sync.tenant is required when component_sync is configured")
 		}
+	}
+	return nil
+}
+
+func validateChangelogEndpoint(endpoint string) error {
+	u, err := url.ParseRequestURI(strings.TrimSpace(endpoint))
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("changelog.endpoint must be an absolute HTTP or HTTPS URL")
 	}
 	return nil
 }

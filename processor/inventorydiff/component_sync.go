@@ -5,6 +5,8 @@ package inventorydiff // import "github.com/open-telemetry/opentelemetry-collect
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -63,9 +65,12 @@ type temporalComponentSyncStarter struct {
 	cfg    ComponentSyncConfig
 }
 
-func newTemporalComponentSyncStarter(cfg ComponentSyncConfig) (*temporalComponentSyncStarter, error) {
+func newTemporalComponentSyncStarter(ctx context.Context, cfg ComponentSyncConfig) (*temporalComponentSyncStarter, error) {
 	cfg = cfg.normalized()
-	tc, err := client.Dial(client.Options{
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	tc, err := client.DialContext(ctx, client.Options{
 		HostPort:  cfg.TemporalAddress,
 		Namespace: cfg.Namespace,
 	})
@@ -134,7 +139,13 @@ func componentKey(components []string) string {
 }
 
 func workflowIDComponent(s string) string {
-	s = strings.TrimSpace(strings.ToLower(s))
+	canon := strings.ToLower(strings.TrimSpace(s))
+	sanitized := sanitizeWorkflowID(canon)
+	sum := sha256.Sum256([]byte(canon))
+	return sanitized + "-" + hex.EncodeToString(sum[:4])
+}
+
+func sanitizeWorkflowID(s string) string {
 	if s == "" {
 		return "unknown"
 	}

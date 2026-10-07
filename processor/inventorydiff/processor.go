@@ -21,38 +21,51 @@ const (
 	attrRequestID        = "request_id"
 	attrAction           = "action"
 	attrHostname         = "hostname"
-	attrMetric           = "metric"
-	attrPrechangeData    = "prechange_data"
-	attrPostchangeData   = "postchange_data"
-	attrPreObservedAt    = "pre_observed_at"
-	attrPostObservedAt   = "post_observed_at"
+	attrComponent        = "component"
+	attrEntityType       = "entity_type"
+	attrEntityName       = "entity_name"
+	attrSummary          = "summary"
+	attrIdentityKeys     = "identity_keys"
+	attrPayload          = "payload"
+	attrTopology         = "topology"
+	attrChanges          = "changes"
+	attrKgOps            = "kg_ops"
+	attrObservedAt       = "observed_at"
 )
 
 type inventoryDiffProcessor struct {
-	logger      *zap.Logger
-	cfg         *Config
-	state       *stateStore
-	sender      changelogSender
+	logger        *zap.Logger
+	cfg           *Config
+	state         *stateStore
+	sender        changelogSender
 	componentSync componentSyncStarter
-	now         func() time.Time
-	mu          sync.Mutex // serializes compare/update across concurrent ConsumeMetrics
+	now           func() time.Time
+	mu            sync.Mutex // serializes compare/update; not held during export
+	inflight      map[string]struct{}
+	syncWG        sync.WaitGroup
+	syncCtx       context.Context
+	syncCancel    context.CancelFunc
 }
 
 func newProcessor(logger *zap.Logger, cfg *Config) *inventoryDiffProcessor {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &inventoryDiffProcessor{
-		logger: logger,
-		cfg:    cfg,
-		state:  newStateStore(),
-		now:    time.Now,
+		logger:     logger,
+		cfg:        cfg,
+		state:      newStateStore(),
+		now:        time.Now,
+		inflight:   map[string]struct{}{},
+		syncCtx:    ctx,
+		syncCancel: cancel,
 	}
 }
 
-func (p *inventoryDiffProcessor) start(_ context.Context, _ component.Host) error {
+func (p *inventoryDiffProcessor) start(ctx context.Context, _ component.Host) error {
 	if p.sender == nil {
 		p.sender = newHTTPChangelogSender(p.cfg.Changelog)
 	}
 	if p.componentSync == nil && p.cfg.ComponentSync != nil {
-		starter, err := newTemporalComponentSyncStarter(p.cfg.ComponentSync.normalized())
+		starter, err := newTemporalComponentSyncStarter(ctx, p.cfg.ComponentSync.normalized())
 		if err != nil {
 			return err
 		}
@@ -62,23 +75,40 @@ func (p *inventoryDiffProcessor) start(_ context.Context, _ component.Host) erro
 }
 
 func (p *inventoryDiffProcessor) shutdown(context.Context) error {
-	if p.componentSync != nil {
-		p.componentSync.Close()
-		p.componentSync = nil
+	if p.syncCancel != nil {
+		p.syncCancel()
+	}
+	p.syncWG.Wait()
+	p.mu.Lock()
+	starter := p.componentSync
+	p.componentSync = nil
+	p.mu.Unlock()
+	if starter != nil {
+		starter.Close()
 	}
 	return nil
 }
 
-// processMetrics compares watched metrics to cached snapshots and emits changelog events.
+// processMetrics compares watched metrics to cached snapshots and emits inventory events.
 // Metrics are always forwarded unchanged (fail-open on changelog errors).
 // Watched metrics absent from this batch are skipped (partial domain×tier pushes must not
 // look like deletes).
 func (p *inventoryDiffProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+	type pendingChange struct {
+		key                  string
+		hostname, metricName string
+		prev, current        MetricSnapshot
+	}
+	var pending []pendingChange
+
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	now := p.now()
 	for _, hostname := range hostnamesInMetrics(md) {
 		for _, metricName := range p.cfg.Metrics {
+			key := stateKey(hostname, metricName)
+			if _, busy := p.inflight[key]; busy {
+				continue
+			}
 			current, present := snapshotFromMetrics(md, hostname, metricName, now)
 			if !present {
 				continue
@@ -91,15 +121,28 @@ func (p *inventoryDiffProcessor) processMetrics(ctx context.Context, md pmetric.
 			if compareSnapshots(prev, current) {
 				continue
 			}
-			if err := p.emitChangelog(ctx, hostname, metricName, prev, current); err != nil {
-				p.logger.Warn("inventorydiff: changelog export failed",
-					zap.String("hostname", hostname),
-					zap.String("metric", metricName),
-					zap.Error(err),
-				)
-			}
-			p.state.Set(hostname, metricName, current)
+			p.inflight[key] = struct{}{}
+			pending = append(pending, pendingChange{
+				key: key, hostname: hostname, metricName: metricName, prev: prev, current: current,
+			})
 		}
+	}
+	p.mu.Unlock()
+
+	for _, ch := range pending {
+		err := p.emitChangelog(ctx, ch.hostname, ch.metricName, ch.prev, ch.current)
+		p.mu.Lock()
+		if err != nil {
+			p.logger.Warn("inventorydiff: changelog export failed",
+				zap.String("hostname", ch.hostname),
+				zap.String("metric", ch.metricName),
+				zap.Error(err),
+			)
+		} else {
+			p.state.Set(ch.hostname, ch.metricName, ch.current)
+		}
+		delete(p.inflight, ch.key)
+		p.mu.Unlock()
 	}
 	return md, nil
 }
@@ -112,40 +155,59 @@ func (p *inventoryDiffProcessor) emitChangelog(
 	if p.sender == nil {
 		return nil
 	}
-	requestID := uuid.NewString()
-	action := "update"
-	if len(pre.Series) > 0 && len(post.Series) == 0 {
-		action = "delete"
-	} else if len(pre.Series) == 0 && len(post.Series) > 0 {
-		action = "create"
+	events := expandEvents(hostname, metric, pre, post)
+	if len(events) == 0 {
+		return nil
 	}
+	requestID := uuid.NewString()
 
 	ld := plog.NewLogs()
 	rl := ld.ResourceLogs().AppendEmpty()
 	rl.Resource().Attributes().PutStr("service.name", serviceNameChangelog)
 	rl.Resource().Attributes().PutStr("hostname", hostname)
 	sl := rl.ScopeLogs().AppendEmpty()
-	lr := sl.LogRecords().AppendEmpty()
 	ts := pcommon.NewTimestampFromTime(p.now())
-	lr.SetTimestamp(ts)
-	lr.SetObservedTimestamp(ts)
-	lr.SetSeverityNumber(plog.SeverityNumberInfo)
-	lr.SetSeverityText("INFO")
-	lr.Body().SetStr("metric identity changed")
-	attrs := lr.Attributes()
-	attrs.PutStr(attrRequestID, requestID)
-	attrs.PutStr(attrAction, action)
-	attrs.PutStr(attrHostname, hostname)
-	attrs.PutStr(attrMetric, metric)
-	attrs.PutStr(attrPrechangeData, snapshotToJSON(pre))
-	attrs.PutStr(attrPostchangeData, snapshotToJSON(post))
-	attrs.PutStr(attrPreObservedAt, pre.ObservedAt)
-	attrs.PutStr(attrPostObservedAt, post.ObservedAt)
 
+	for _, ev := range events {
+		lr := sl.LogRecords().AppendEmpty()
+		lr.SetTimestamp(ts)
+		lr.SetObservedTimestamp(ts)
+		lr.SetSeverityNumber(plog.SeverityNumberInfo)
+		lr.SetSeverityText("INFO")
+		lr.Body().SetStr(ev.Summary)
+		attrs := lr.Attributes()
+		attrs.PutStr(attrRequestID, requestID)
+		attrs.PutStr(attrAction, ev.Action)
+		attrs.PutStr(attrHostname, ev.Hostname)
+		attrs.PutStr(attrComponent, ev.Component)
+		attrs.PutStr(attrEntityType, ev.EntityType)
+		attrs.PutStr(attrEntityName, ev.EntityName)
+		attrs.PutStr(attrSummary, ev.Summary)
+		attrs.PutStr(attrIdentityKeys, mustJSON(ev.IdentityKeys))
+		if len(ev.Payload) > 0 {
+			attrs.PutStr(attrPayload, mustJSON(ev.Payload))
+		}
+		if len(ev.Topology) > 0 {
+			attrs.PutStr(attrTopology, mustJSON(ev.Topology))
+		}
+		if len(ev.Changes) > 0 {
+			attrs.PutStr(attrChanges, mustJSON(ev.Changes))
+		}
+		if len(ev.KgOps) > 0 {
+			attrs.PutStr(attrKgOps, mustJSON(ev.KgOps))
+		}
+		if ev.ObservedAt != "" {
+			attrs.PutStr(attrObservedAt, ev.ObservedAt)
+		}
+	}
+
+	if err := p.sender.Send(ctx, ld); err != nil {
+		return err
+	}
 	if p.componentSync != nil {
 		p.triggerComponentSync(hostname, metric, requestID)
 	}
-	return p.sender.Send(ctx, ld)
+	return nil
 }
 
 func (p *inventoryDiffProcessor) triggerComponentSync(hostname, metric, requestID string) {
@@ -157,8 +219,10 @@ func (p *inventoryDiffProcessor) triggerComponentSync(hostname, metric, requestI
 	if p.cfg.ComponentSync != nil && p.cfg.ComponentSync.Timeout > 0 {
 		timeout = p.cfg.ComponentSync.Timeout
 	}
+	p.syncWG.Add(1)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer p.syncWG.Done()
+		ctx, cancel := context.WithTimeout(p.syncCtx, timeout)
 		defer cancel()
 		if err := starter.StartComponentSync(ctx, hostname, metric, requestID); err != nil {
 			p.logger.Warn("inventorydiff: component sync workflow start failed",
