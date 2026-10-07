@@ -20,12 +20,12 @@ const (
 
 // Config configures the BMC fault signal processor.
 type Config struct {
-	FaultCatalogPath string               `mapstructure:"fault_catalog_path"`
-	Endpoint         string               `mapstructure:"endpoint"`
-	Tenant           string               `mapstructure:"tenant"`
-	TenantHeader     string               `mapstructure:"tenant_header"`
-	TenantAttribute  string               `mapstructure:"tenant_attribute"`
-	Timeout          time.Duration        `mapstructure:"timeout"`
+	FaultCatalogPath string                  `mapstructure:"fault_catalog_path"`
+	Endpoint         string                  `mapstructure:"endpoint"`
+	Tenant           string                  `mapstructure:"tenant"`
+	TenantHeader     string                  `mapstructure:"tenant_header"`
+	TenantAttribute  string                  `mapstructure:"tenant_attribute"`
+	Timeout          time.Duration           `mapstructure:"timeout"`
 	ClientConfig     confighttp.ClientConfig `mapstructure:",squash"`
 }
 

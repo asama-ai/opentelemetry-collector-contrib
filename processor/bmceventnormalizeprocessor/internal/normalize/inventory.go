@@ -32,17 +32,19 @@ type Identity struct {
 
 // InventoryResolver resolves BMC identity from IP and optional MessageId fallback.
 type InventoryResolver struct {
-	neo4jEndpoint  string
-	neo4jDatabase  string
-	neo4jUsername  string
-	neo4jPassword  string
-	neo4jQuery     string
-	promEndpoint   string
-	promQuery      string
-	httpClient     *http.Client
-	lookupCache    map[string]lookupCacheEntry
-	lookupCacheMu  sync.RWMutex
-	cacheTTL       time.Duration
+	neo4jEndpoint   string
+	neo4jDatabase   string
+	neo4jUsername   string
+	neo4jPassword   string
+	neo4jQuery      string
+	promEndpoint    string
+	promQuery       string
+	httpClient      *http.Client
+	lookupCache     map[string]lookupCacheEntry
+	lookupCacheMu   sync.RWMutex
+	cacheTTL        time.Duration
+	boltMu          sync.Mutex
+	boltDriver      neo4j.DriverWithContext
 	messageIDLookup bool
 	indexIPLookup   bool
 
@@ -52,7 +54,10 @@ type InventoryResolver struct {
 type lookupCacheEntry struct {
 	identity Identity
 	expires  time.Time
+	negative bool
 }
+
+const negativeLookupTTL = 45 * time.Second
 
 type promQueryResponse struct {
 	Status string `json:"status"`
@@ -92,7 +97,7 @@ const (
 	identitySourceMessageID  = "message_id"
 
 	defaultNeo4jDatabase = "neo4j"
-	defaultNeo4jQuery      = `MATCH (d:Device)
+	defaultNeo4jQuery    = `MATCH (d:Device)
 WITH d, split(coalesce(d.oob_ip, d.out_of_band_ip, d.bmc_ip, ''), '/')[0] AS oob_host
 WHERE toLower(oob_host) = toLower(split($bmc_ip, '/')[0])
 OPTIONAL MATCH (d)-[:HAS_TYPE]->(:DeviceType)-[:MANUFACTURED_BY]->(m:Manufacturer)
@@ -107,13 +112,13 @@ LIMIT 1`
 
 // InventoryConfig configures optional identity resolution.
 type InventoryConfig struct {
-	Neo4jEndpoint  string
-	Neo4jDatabase  string
-	Neo4jUsername  string
-	Neo4jPassword  string
-	Neo4jQuery     string
-	Neo4jTimeout   time.Duration
-	Neo4jCacheTTL  time.Duration
+	Neo4jEndpoint      string
+	Neo4jDatabase      string
+	Neo4jUsername      string
+	Neo4jPassword      string
+	Neo4jQuery         string
+	Neo4jTimeout       time.Duration
+	Neo4jCacheTTL      time.Duration
 	PrometheusEndpoint string
 	PrometheusQuery    string
 	PrometheusTimeout  time.Duration
@@ -254,10 +259,33 @@ func (r *InventoryResolver) cachedLookup(bmcIP string) (Identity, bool) {
 	r.lookupCacheMu.RLock()
 	defer r.lookupCacheMu.RUnlock()
 	entry, ok := r.lookupCache[bmcIP]
-	if !ok || time.Now().After(entry.expires) {
+	if !ok || entry.negative || time.Now().After(entry.expires) {
 		return Identity{}, false
 	}
 	return entry.identity, true
+}
+
+func negativeLookupKey(source, bmcIP string) string {
+	return source + "|" + bmcIP
+}
+
+func (r *InventoryResolver) cachedNegative(source, bmcIP string) bool {
+	r.lookupCacheMu.RLock()
+	defer r.lookupCacheMu.RUnlock()
+	entry, ok := r.lookupCache[negativeLookupKey(source, bmcIP)]
+	if !ok || !entry.negative || time.Now().After(entry.expires) {
+		return false
+	}
+	return true
+}
+
+func (r *InventoryResolver) storeNegative(source, bmcIP string) {
+	r.lookupCacheMu.Lock()
+	r.lookupCache[negativeLookupKey(source, bmcIP)] = lookupCacheEntry{
+		negative: true,
+		expires:  time.Now().Add(negativeLookupTTL),
+	}
+	r.lookupCacheMu.Unlock()
 }
 
 func (r *InventoryResolver) storeLookup(bmcIP string, id Identity) {
@@ -288,8 +316,11 @@ func (r *InventoryResolver) lookupNeo4j(bmcIP string) (Identity, bool) {
 	if r.neo4jEndpoint == "" || r.neo4jQuery == "" {
 		return Identity{}, false
 	}
-	if id, ok := r.cachedLookup(bmcIP); ok {
+	if id, ok := r.cachedLookup(bmcIP); ok && id.Source == identitySourceNeo4j {
 		return id, true
+	}
+	if r.cachedNegative(identitySourceNeo4j, bmcIP) {
+		return Identity{}, false
 	}
 
 	statement := strings.ReplaceAll(r.neo4jQuery, "$IP", "$bmc_ip")
@@ -304,10 +335,28 @@ func (r *InventoryResolver) lookupNeo4j(bmcIP string) (Identity, bool) {
 		id, ok, err = r.lookupNeo4jHTTP(bmcIP, statement)
 	}
 	if err != nil || !ok {
+		r.storeNegative(identitySourceNeo4j, bmcIP)
 		return Identity{}, false
 	}
 	r.storeLookup(bmcIP, id)
 	return id, true
+}
+
+func (r *InventoryResolver) neo4jDriver() (neo4j.DriverWithContext, error) {
+	r.boltMu.Lock()
+	defer r.boltMu.Unlock()
+	if r.boltDriver != nil {
+		return r.boltDriver, nil
+	}
+	driver, err := neo4j.NewDriverWithContext(
+		r.neo4jEndpoint,
+		neo4j.BasicAuth(r.neo4jUsername, r.neo4jPassword, ""),
+	)
+	if err != nil {
+		return nil, err
+	}
+	r.boltDriver = driver
+	return driver, nil
 }
 
 func isBoltNeo4jEndpoint(endpoint string) bool {
@@ -320,14 +369,10 @@ func (r *InventoryResolver) lookupNeo4jBolt(bmcIP, statement string) (Identity, 
 	ctx, cancel := context.WithTimeout(context.Background(), r.httpClient.Timeout)
 	defer cancel()
 
-	driver, err := neo4j.NewDriverWithContext(
-		r.neo4jEndpoint,
-		neo4j.BasicAuth(r.neo4jUsername, r.neo4jPassword, ""),
-	)
+	driver, err := r.neo4jDriver()
 	if err != nil {
 		return Identity{}, false, err
 	}
-	defer func() { _ = driver.Close(ctx) }()
 
 	session := driver.NewSession(ctx, neo4j.SessionConfig{DatabaseName: r.neo4jDatabase})
 	defer func() { _ = session.Close(ctx) }()
@@ -409,14 +454,22 @@ func (r *InventoryResolver) lookupPrometheus(bmcIP string) (Identity, bool) {
 	if r.promEndpoint == "" || r.promQuery == "" {
 		return Identity{}, false
 	}
-	if id, ok := r.cachedLookup(bmcIP); ok {
+	if id, ok := r.cachedLookup(bmcIP); ok && id.Source == identitySourcePrometheus {
 		return id, true
+	}
+	if r.cachedNegative(identitySourcePrometheus, bmcIP) {
+		return Identity{}, false
+	}
+
+	fail := func() (Identity, bool) {
+		r.storeNegative(identitySourcePrometheus, bmcIP)
+		return Identity{}, false
 	}
 
 	query := strings.ReplaceAll(r.promQuery, "$IP", bmcIP)
 	endpoint, err := url.Parse(r.promEndpoint + "/api/v1/query")
 	if err != nil {
-		return Identity{}, false
+		return fail()
 	}
 	q := endpoint.Query()
 	q.Set("query", query)
@@ -424,32 +477,32 @@ func (r *InventoryResolver) lookupPrometheus(bmcIP string) (Identity, bool) {
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint.String(), http.NoBody)
 	if err != nil {
-		return Identity{}, false
+		return fail()
 	}
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return Identity{}, false
+		return fail()
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Identity{}, false
+		return fail()
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Identity{}, false
+		return fail()
 	}
 
 	var parsed promQueryResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return Identity{}, false
+		return fail()
 	}
 	if parsed.Status != "success" || len(parsed.Data.Result) == 0 {
-		return Identity{}, false
+		return fail()
 	}
 
 	id, ok := r.identityFromInventoryLabels(parsed.Data.Result[0].Metric, identitySourcePrometheus)
 	if !ok {
-		return Identity{}, false
+		return fail()
 	}
 	r.storeLookup(bmcIP, id)
 	return id, true

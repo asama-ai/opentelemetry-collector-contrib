@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configopaque"
 )
 
 const (
@@ -21,11 +22,11 @@ const (
 // Neo4jInventoryConfig queries Neo4j to map BMC IP to vendor/model/firmware.
 type Neo4jInventoryConfig struct {
 	// URL or Endpoint: bolt://host:port or http(s)://host:port for the HTTP API.
-	URL      string `mapstructure:"url"`
-	Endpoint string `mapstructure:"endpoint"`
-	Database string `mapstructure:"database"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
+	URL      string              `mapstructure:"url"`
+	Endpoint string              `mapstructure:"endpoint"`
+	Database string              `mapstructure:"database"`
+	Username string              `mapstructure:"username"`
+	Password configopaque.String `mapstructure:"password"`
 	// Query is a Cypher statement; $bmc_ip (or $IP) is bound to the event BMC IP.
 	Query string `mapstructure:"query"`
 	// Timeout for Neo4j requests.

@@ -6,8 +6,7 @@
       "assert"
     ],
     "close_on_lifecycle": [
-      "deassert",
-      "info"
+      "deassert"
     ],
     "ignore_lifecycle": [
       "unknown"

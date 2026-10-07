@@ -37,7 +37,7 @@ func newNormalizeProcessor(cfg *Config) (*normalizeProcessor, error) {
 		Neo4jEndpoint:      firstNonEmptyStr(cfg.Identity.Neo4j.URL, cfg.Identity.Neo4j.Endpoint),
 		Neo4jDatabase:      cfg.Identity.Neo4j.Database,
 		Neo4jUsername:      cfg.Identity.Neo4j.Username,
-		Neo4jPassword:      cfg.Identity.Neo4j.Password,
+		Neo4jPassword:      string(cfg.Identity.Neo4j.Password),
 		Neo4jQuery:         cfg.Identity.Neo4j.Query,
 		Neo4jTimeout:       cfg.Identity.Neo4j.Timeout,
 		Neo4jCacheTTL:      cfg.Identity.Neo4j.CacheTTL,

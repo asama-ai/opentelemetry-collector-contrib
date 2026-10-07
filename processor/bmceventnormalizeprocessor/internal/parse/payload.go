@@ -70,12 +70,6 @@ type redfishEventPayload struct {
 	Oem     redfishEventOem    `json:"Oem"`
 }
 
-var knownBMCIPs = map[string]string{
-	"10.25.40.206": "dell",
-	"10.25.40.207": "hpe",
-	"10.25.40.208": "lenovo",
-}
-
 // ParsePayload expands a raw Redfish EventService POST body into alert records.
 func ParsePayload(body []byte, bmcIP, envelopeContext string) ([]Event, error) {
 	if len(body) == 0 {
@@ -84,11 +78,16 @@ func ParsePayload(body []byte, bmcIP, envelopeContext string) ([]Event, error) {
 
 	var payload redfishEventPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("invalid redfish event json: %w", err)
+	}
+	if len(payload.Events) == 0 {
 		var single redfishEventWire
-		if errSingle := json.Unmarshal(body, &single); errSingle != nil {
+		if err := json.Unmarshal(body, &single); err != nil {
 			return nil, fmt.Errorf("invalid redfish event json: %w", err)
 		}
-		payload.Events = []redfishEventWire{single}
+		if hasSubstance(wireToEvent(single, envelopeContext, bmcIP, payload.Oem)) {
+			payload.Events = []redfishEventWire{single}
+		}
 	}
 
 	if strings.TrimSpace(payload.Context) != "" {
@@ -105,7 +104,7 @@ func ParsePayload(body []byte, bmcIP, envelopeContext string) ([]Event, error) {
 			continue
 		}
 		if ev.Vendor == "" {
-			ev.Vendor = detectVendor(ev, bmcIP)
+			ev.Vendor = detectVendor(ev)
 		}
 		if ev.Message == "" {
 			ev.Message = ev.MessageID
@@ -153,7 +152,7 @@ func wireToEvent(wire redfishEventWire, envelopeContext, bmcIP string, envelopeO
 	}
 }
 
-func detectVendor(ev Event, bmcIP string) string {
+func detectVendor(ev Event) string {
 	if ev.HPEHostname != "" || ev.HPEResource != "" {
 		return "hpe"
 	}
@@ -171,9 +170,6 @@ func detectVendor(ev Event, bmcIP string) string {
 		return "lenovo"
 	case strings.HasPrefix(mid, "IDRAC.") || strings.HasPrefix(mid, "PDR") || strings.HasPrefix(mid, "AMP"):
 		return "dell"
-	}
-	if v, ok := knownBMCIPs[bmcIP]; ok {
-		return v
 	}
 	return ""
 }

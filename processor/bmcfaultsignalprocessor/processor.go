@@ -27,13 +27,14 @@ import (
 var processorCapabilities = consumer.Capabilities{MutatesData: false}
 
 type faultSignalProcessor struct {
-	cfg     *Config
-	catalog *catalog.Catalog
-	client  *http.Client
-	logger  *zap.Logger
+	cfg      *Config
+	catalog  *catalog.Catalog
+	client   *http.Client
+	logger   *zap.Logger
+	settings component.TelemetrySettings
 }
 
-func newFaultSignalProcessor(cfg *Config, logger *zap.Logger) (*faultSignalProcessor, error) {
+func newFaultSignalProcessor(cfg *Config, set processor.Settings) (*faultSignalProcessor, error) {
 	cat, err := catalog.Load(cfg.FaultCatalogPath)
 	if err != nil {
 		return nil, err
@@ -43,15 +44,35 @@ func newFaultSignalProcessor(cfg *Config, logger *zap.Logger) (*faultSignalProce
 		timeout = 5 * time.Second
 	}
 	return &faultSignalProcessor{
-		cfg:     cfg,
-		catalog: cat,
-		client:  &http.Client{Timeout: timeout},
-		logger:  logger,
+		cfg:      cfg,
+		catalog:  cat,
+		client:   &http.Client{Timeout: timeout},
+		logger:   set.Logger,
+		settings: set.TelemetrySettings,
 	}, nil
 }
 
+func (p *faultSignalProcessor) start(ctx context.Context, host component.Host) error {
+	clientCfg := p.cfg.ClientConfig
+	if clientCfg.Endpoint == "" {
+		clientCfg.Endpoint = p.cfg.Endpoint
+	}
+	if clientCfg.Timeout == 0 {
+		clientCfg.Timeout = p.cfg.Timeout
+	}
+	var extensions map[component.ID]component.Component
+	if host != nil {
+		extensions = host.GetExtensions()
+	}
+	client, err := clientCfg.ToClient(ctx, extensions, p.settings)
+	if err != nil {
+		return err
+	}
+	p.client = client
+	return nil
+}
+
 func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
-	var firstErr error
 	for i := 0; i < ld.ResourceLogs().Len(); i++ {
 		rl := ld.ResourceLogs().At(i)
 		resAttrs := rl.Resource().Attributes()
@@ -80,14 +101,11 @@ func (p *faultSignalProcessor) ProcessLogs(ctx context.Context, ld plog.Logs) (p
 
 				if err := p.postIngest(ctx, tenant, payload); err != nil {
 					p.logger.Error("bmc fault ingest failed", zap.Error(err), zap.String("asama_id", asamaID), zap.String("action", action))
-					if firstErr == nil {
-						firstErr = err
-					}
 				}
 			}
 		}
 	}
-	return ld, firstErr
+	return ld, nil
 }
 
 func (p *faultSignalProcessor) postIngest(ctx context.Context, tenant string, payload map[string]string) error {
@@ -141,7 +159,7 @@ func createLogsProcessor(
 	if err := oCfg.Validate(); err != nil {
 		return nil, err
 	}
-	proc, err := newFaultSignalProcessor(oCfg, set.Logger)
+	proc, err := newFaultSignalProcessor(oCfg, set)
 	if err != nil {
 		return nil, err
 	}
@@ -152,5 +170,6 @@ func createLogsProcessor(
 		nextConsumer,
 		proc.ProcessLogs,
 		processorhelper.WithCapabilities(processorCapabilities),
+		processorhelper.WithStart(proc.start),
 	)
 }

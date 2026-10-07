@@ -253,9 +253,9 @@ func TestInventoryNeo4jCache(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	resolver := NewInventoryResolver(InventoryConfig{
-		Neo4jEndpoint: srv.URL,
-		Neo4jCacheTTL: time.Hour,
-		IndexIPLookup: false,
+		Neo4jEndpoint:     srv.URL,
+		Neo4jCacheTTL:     time.Hour,
+		IndexIPLookup:     false,
 		MessageIDFallback: false,
 	})
 	resolver.SetEngine(engine)
@@ -267,6 +267,40 @@ func TestInventoryNeo4jCache(t *testing.T) {
 	id = resolver.Resolve("10.25.40.207", "", "", "", "")
 	require.Equal(t, "nxtegn-test-02", id.Hostname)
 	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Neo4j again")
+}
+
+func TestInventoryNegativeCache(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		PrometheusEndpoint: srv.URL,
+		PrometheusQuery:    `redfish_bmc_manager_info{instance="$IP"}`,
+		IndexIPLookup:      false,
+		MessageIDFallback:  false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Empty(t, id.Vendor)
+	require.Empty(t, id.Source)
+	require.Equal(t, 1, calls)
+
+	id = resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Empty(t, id.Vendor)
+	require.Equal(t, 1, calls, "failed lookup should be cached so the next resolve skips the network")
 }
 
 func TestMatchBundleFromLabels(t *testing.T) {

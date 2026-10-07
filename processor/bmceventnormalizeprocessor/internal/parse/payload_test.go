@@ -40,6 +40,26 @@ func TestParseHPEStorageAlert(t *testing.T) {
 	require.Contains(t, events[0].Context, "asama-event-listener")
 }
 
+func TestParseBareEventObject(t *testing.T) {
+	body := []byte(`{"MessageId":"IDRAC.2.8.SYS336","Message":"An existing hash value is updated.","Severity":"Informational"}`)
+	events, err := ParsePayload(body, "10.25.40.206", "")
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.Equal(t, "dell", events[0].Vendor)
+	require.Equal(t, "IDRAC.2.8.SYS336", events[0].MessageID)
+}
+
+func TestParseInvalidJSON(t *testing.T) {
+	_, err := ParsePayload([]byte(`{"Events":`), "10.25.40.206", "")
+	require.Error(t, err)
+}
+
+func TestParseEmptyEnvelope(t *testing.T) {
+	events, err := ParsePayload([]byte(`{"Context":"asama-event-listener","Events":[]}`), "10.25.40.206", "")
+	require.NoError(t, err)
+	require.Empty(t, events)
+}
+
 func TestParseEmptyEventSkipped(t *testing.T) {
 	body := []byte(`{
 		"Context": "asama-event-listener",

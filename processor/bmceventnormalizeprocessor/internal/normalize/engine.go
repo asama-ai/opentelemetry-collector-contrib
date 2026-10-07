@@ -15,45 +15,45 @@ import (
 
 // Result holds a normalized BMC event.
 type Result struct {
-	MappingStatus string
-	AsamaMessageID string
-	AsamaMessageKey string
-	AsamaID string
-	Message string
-	Description string
-	Severity string
-	MessageSeverity string
-	Lifecycle string
-	Domain string
-	Component string
+	MappingStatus        string
+	AsamaMessageID       string
+	AsamaMessageKey      string
+	AsamaID              string
+	Message              string
+	Description          string
+	Severity             string
+	MessageSeverity      string
+	Lifecycle            string
+	Domain               string
+	Component            string
 	SubscriptionPriority string
-	VendorName string
-	VendorMessageID string
-	VendorMessage string
-	VendorSeverity string
-	VendorMessageArgs []string
-	AsamaMessageArgs []string
-	ComponentArgIndex int
-	BundleID string
-	BMCIP string
-	BMCModel string
-	FirmwareVersion string
-	EventTime string
+	VendorName           string
+	VendorMessageID      string
+	VendorMessage        string
+	VendorSeverity       string
+	VendorMessageArgs    []string
+	AsamaMessageArgs     []string
+	ComponentArgIndex    int
+	BundleID             string
+	BMCIP                string
+	BMCModel             string
+	FirmwareVersion      string
+	EventTime            string
 }
 
 type sideMapping struct {
-	VendorMessageID     string `json:"vendor_message_id"`
-	VendorKey           string `json:"vendor_key"`
-	AsamaMessageKey     string `json:"asama_message_key"`
-	AsamaMessageID      string `json:"asama_message_id"`
-	AsamaID             string `json:"asama_id"`
-	Lifecycle           string `json:"lifecycle"`
-	ArgMap              []int  `json:"arg_map"`
-	VendorNumberOfArgs  int    `json:"vendor_number_of_args"`
-	AsamaNumberOfArgs   *int   `json:"asama_number_of_args"`
-	SourceRegistry      string `json:"source_registry"`
-	ComponentArgIndex   int    `json:"component_arg_index"`
-	BundleID            string `json:"bundle_id"`
+	VendorMessageID    string `json:"vendor_message_id"`
+	VendorKey          string `json:"vendor_key"`
+	AsamaMessageKey    string `json:"asama_message_key"`
+	AsamaMessageID     string `json:"asama_message_id"`
+	AsamaID            string `json:"asama_id"`
+	Lifecycle          string `json:"lifecycle"`
+	ArgMap             []int  `json:"arg_map"`
+	VendorNumberOfArgs int    `json:"vendor_number_of_args"`
+	AsamaNumberOfArgs  *int   `json:"asama_number_of_args"`
+	SourceRegistry     string `json:"source_registry"`
+	ComponentArgIndex  int    `json:"component_arg_index"`
+	BundleID           string `json:"bundle_id"`
 }
 
 type bundleIndex struct {
@@ -62,9 +62,9 @@ type bundleIndex struct {
 }
 
 type asamaRegistry struct {
-	RegistryPrefix  string                       `json:"RegistryPrefix"`
-	RegistryVersion string                       `json:"RegistryVersion"`
-	Messages        map[string]asamaMessage      `json:"Messages"`
+	RegistryPrefix  string                  `json:"RegistryPrefix"`
+	RegistryVersion string                  `json:"RegistryVersion"`
+	Messages        map[string]asamaMessage `json:"Messages"`
 }
 
 type asamaMessage struct {
@@ -73,7 +73,7 @@ type asamaMessage struct {
 	Severity        string `json:"Severity"`
 	MessageSeverity string `json:"MessageSeverity"`
 	NumberOfArgs    int    `json:"NumberOfArgs"`
-		Oem             struct {
+	Oem             struct {
 		Asama struct {
 			AsamaID              string `json:"AsamaId"`
 			DefaultLifecycle     string `json:"DefaultLifecycle"`
@@ -103,9 +103,9 @@ type indexBundle struct {
 }
 
 type faultPair struct {
-	AsamaID           string `json:"asama_id"`
-	AsamaMessageKey   string `json:"asama_message_key"`
-	ComponentArgIndex int    `json:"component_arg_index"`
+	AsamaID           string        `json:"asama_id"`
+	AsamaMessageKey   string        `json:"asama_message_key"`
+	ComponentArgIndex int           `json:"component_arg_index"`
 	AssertMappings    []mappingSide `json:"assert_mappings"`
 	DeassertMappings  []mappingSide `json:"deassert_mappings"`
 }
@@ -137,15 +137,15 @@ type bundleFile struct {
 
 // Engine loads Asama registry and vendor mapping bundles for normalization.
 type Engine struct {
-	asamaPath      string
-	mappingsIndex  string
-	mappingsDir    string
+	asamaPath     string
+	mappingsIndex string
+	mappingsDir   string
 
-	mu            sync.RWMutex
-	asama         asamaRegistry
-	index         indexFile
-	bundleCache   map[string]bundleIndex
-	bundleMeta    map[string]bundleFile
+	mu          sync.RWMutex
+	asama       asamaRegistry
+	index       indexFile
+	bundleCache map[string]bundleIndex
+	bundleMeta  map[string]bundleFile
 }
 
 func NewEngine(asamaPath, mappingsIndex, mappingsDir string) (*Engine, error) {
@@ -191,27 +191,25 @@ func (e *Engine) reload() error {
 
 // LookupBundle returns mapping bundle metadata for vendor registry resolution.
 func (e *Engine) LookupBundle(vendor, bmcModel, firmwareVersion, bundleID string) (bundleFile, error) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
 	_, bundle, err := e.loadBundle(vendor, bmcModel, firmwareVersion, bundleID)
 	return bundle, err
 }
 
 func (e *Engine) Normalize(vendor, messageID, vendorMessage, severity, bmcIP, bmcModel, firmwareVersion, bundleID, eventTime string, vendorArgs []string) Result {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	idx, bundle, err := e.loadBundle(vendor, bmcModel, firmwareVersion, bundleID)
+	e.mu.RLock()
+	asama := e.asama
+	e.mu.RUnlock()
 	sourceMeta := Result{
-		VendorName:      strings.ToLower(vendor),
-		VendorMessageID: messageID,
-		VendorMessage:   vendorMessage,
-		VendorSeverity:  severity,
+		VendorName:        strings.ToLower(vendor),
+		VendorMessageID:   messageID,
+		VendorMessage:     vendorMessage,
+		VendorSeverity:    severity,
 		VendorMessageArgs: vendorArgs,
-		BMCIP:           bmcIP,
-		BMCModel:        bmcModel,
-		FirmwareVersion: firmwareVersion,
-		EventTime:       eventTime,
+		BMCIP:             bmcIP,
+		BMCModel:          bmcModel,
+		FirmwareVersion:   firmwareVersion,
+		EventTime:         eventTime,
 	}
 
 	if err != nil {
@@ -238,7 +236,7 @@ func (e *Engine) Normalize(vendor, messageID, vendorMessage, severity, bmcIP, bm
 	}
 
 	asamaKey := mapping.AsamaMessageKey
-	asamaMsg, ok := e.asama.Messages[asamaKey]
+	asamaMsg, ok := asama.Messages[asamaKey]
 	if !ok {
 		sourceMeta.MappingStatus = "unmapped"
 		return sourceMeta
@@ -254,7 +252,7 @@ func (e *Engine) Normalize(vendor, messageID, vendorMessage, severity, bmcIP, bm
 
 	asamaMessageID := mapping.AsamaMessageID
 	if asamaMessageID == "" {
-		asamaMessageID = fmt.Sprintf("%s.%s.%s", e.asama.RegistryPrefix, e.asama.RegistryVersion, asamaKey)
+		asamaMessageID = fmt.Sprintf("%s.%s.%s", asama.RegistryPrefix, asama.RegistryVersion, asamaKey)
 	}
 	asamaID := mapping.AsamaID
 	if asamaID == "" {
@@ -303,11 +301,17 @@ func (e *Engine) Normalize(vendor, messageID, vendorMessage, severity, bmcIP, bm
 
 func (e *Engine) loadBundle(vendor, bmcModel, firmwareVersion, bundleID string) (bundleIndex, bundleFile, error) {
 	cacheKey := strings.Join([]string{vendor, bmcModel, firmwareVersion, bundleID}, "|")
+	e.mu.RLock()
 	if idx, ok := e.bundleCache[cacheKey]; ok {
-		return idx, e.bundleMeta[cacheKey], nil
+		meta := e.bundleMeta[cacheKey]
+		e.mu.RUnlock()
+		return idx, meta, nil
 	}
+	index := e.index
+	mappingsDir := e.mappingsDir
+	e.mu.RUnlock()
 
-	path, _, err := resolveBundlePath(e.index, e.mappingsDir, vendor, bmcModel, firmwareVersion, bundleID)
+	path, _, err := resolveBundlePath(index, mappingsDir, vendor, bmcModel, firmwareVersion, bundleID)
 	if err != nil {
 		return bundleIndex{}, bundleFile{}, err
 	}
@@ -322,8 +326,15 @@ func (e *Engine) loadBundle(vendor, bmcModel, firmwareVersion, bundleID string) 
 	}
 
 	idx := buildIndexFromBundle(bundle)
+	e.mu.Lock()
+	if existing, ok := e.bundleCache[cacheKey]; ok {
+		meta := e.bundleMeta[cacheKey]
+		e.mu.Unlock()
+		return existing, meta, nil
+	}
 	e.bundleCache[cacheKey] = idx
 	e.bundleMeta[cacheKey] = bundle
+	e.mu.Unlock()
 	return idx, bundle, nil
 }
 
