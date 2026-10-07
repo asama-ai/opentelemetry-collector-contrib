@@ -17,6 +17,12 @@ func enrichNetworkEvent(ev *InventoryEvent, labels map[string]string) {
 	for k, v := range ev.IdentityKeys {
 		id[k] = v
 	}
+	if ev.Action == "remove" {
+		if op, ok := deleteEdgeFromTopology(ev, id); ok {
+			ev.KgOps = []KgOp{op}
+		}
+		return
+	}
 	ev.KgOps = []KgOp{{
 		Op: "merge_node", NodeLabel: ev.EntityType, Identity: id,
 	}}

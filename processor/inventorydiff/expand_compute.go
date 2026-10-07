@@ -17,15 +17,13 @@ func enrichComputeEvent(ev *InventoryEvent, labels map[string]string) {
 	for k, v := range ev.IdentityKeys {
 		id[k] = v
 	}
+	if ev.Action == "remove" {
+		if op, ok := deleteEdgeFromTopology(ev, id); ok {
+			ev.KgOps = []KgOp{op}
+		}
+		return
+	}
 	ev.KgOps = []KgOp{{
 		Op: "merge_node", NodeLabel: ev.EntityType, Identity: id,
 	}}
-	if ev.Action == "remove" {
-		ev.KgOps[0].Op = "delete_edge"
-		ev.KgOps[0].EdgeType = "HAS_" + ev.EntityType
-		ev.KgOps[0].NodeLabel = "Device"
-		ev.KgOps[0].Identity = map[string]string{"hostname": ev.Hostname}
-		ev.KgOps[0].ToLabel = ev.EntityType
-		ev.KgOps[0].ToIdentity = id
-	}
 }

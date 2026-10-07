@@ -40,7 +40,7 @@ func newHTTPChangelogSender(cfg ChangelogExport) *httpChangelogSender {
 }
 
 func normalizeLogsEndpoint(endpoint string) string {
-	endpoint = strings.TrimRight(endpoint, "/")
+	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
 	if strings.HasSuffix(endpoint, "/v1/logs") {
 		return endpoint
 	}

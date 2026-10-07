@@ -63,6 +63,17 @@ func enrichStorageEvent(ev *InventoryEvent, labels map[string]string) {
 			Identity: map[string]string{"hostname": ev.Hostname, "name": raid},
 		}}
 	}
+	// md member and array ops above stay as they are. Other storage
+	// removes only get a delete_edge when nothing was set yet.
+	if ev.Action == "remove" && len(ev.KgOps) == 0 {
+		id := map[string]string{"hostname": ev.Hostname}
+		for k, v := range ev.IdentityKeys {
+			id[k] = v
+		}
+		if op, ok := deleteEdgeFromTopology(ev, id); ok {
+			ev.KgOps = []KgOp{op}
+		}
+	}
 }
 
 func mdMemberSummary(action, disk, raid string) string {

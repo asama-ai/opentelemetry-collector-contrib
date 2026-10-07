@@ -210,11 +210,43 @@ func identitySeriesKey(labels map[string]string, identityLabels []string) string
 		// Host-scoped singleton (BIOS/OS): one series per host observation.
 		return "_host_"
 	}
-	parts := make([]string, 0, len(identityLabels))
+	// Length prefixes so a value cannot collide with the next label.
+	var b strings.Builder
 	for _, k := range identityLabels {
-		parts = append(parts, k+"="+labels[k])
+		v := labels[k]
+		fmt.Fprintf(&b, "%d:%s%d:%s", len(k), k, len(v), v)
 	}
-	return strings.Join(parts, "\x00")
+	return b.String()
+}
+
+// deleteEdgeFromTopology builds a remove op from the last topology hop.
+// JSON keys stay the existing KgOp fields; direction stays on topology.
+func deleteEdgeFromTopology(ev *InventoryEvent, leafID map[string]string) (KgOp, bool) {
+	hops := ev.Topology
+	if len(hops) < 2 {
+		return KgOp{}, false
+	}
+	parent := hops[len(hops)-2]
+	leaf := hops[len(hops)-1]
+	if leaf.Edge == "" || parent.NodeType == "" || leaf.NodeType == "" {
+		return KgOp{}, false
+	}
+	parentID := make(map[string]string, len(parent.Match))
+	for k, v := range parent.Match {
+		parentID[k] = v
+	}
+	toID := make(map[string]string, len(leafID))
+	for k, v := range leafID {
+		toID[k] = v
+	}
+	return KgOp{
+		Op:         "delete_edge",
+		EdgeType:   leaf.Edge,
+		NodeLabel:  parent.NodeType,
+		Identity:   parentID,
+		ToLabel:    leaf.NodeType,
+		ToIdentity: toID,
+	}, true
 }
 
 // kgIdentityKeys builds leaf-node props from Identity FieldMaps with ToKG set.
