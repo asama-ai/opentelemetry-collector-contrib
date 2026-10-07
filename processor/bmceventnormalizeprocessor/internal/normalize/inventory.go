@@ -359,6 +359,18 @@ func (r *InventoryResolver) neo4jDriver() (neo4j.DriverWithContext, error) {
 	return driver, nil
 }
 
+// Close releases the cached Bolt driver and its connection pool.
+func (r *InventoryResolver) Close(ctx context.Context) error {
+	r.boltMu.Lock()
+	defer r.boltMu.Unlock()
+	if r.boltDriver == nil {
+		return nil
+	}
+	err := r.boltDriver.Close(ctx)
+	r.boltDriver = nil
+	return err
+}
+
 func isBoltNeo4jEndpoint(endpoint string) bool {
 	endpoint = strings.ToLower(strings.TrimSpace(endpoint))
 	return strings.HasPrefix(endpoint, "bolt://") || strings.HasPrefix(endpoint, "bolt+s://") ||

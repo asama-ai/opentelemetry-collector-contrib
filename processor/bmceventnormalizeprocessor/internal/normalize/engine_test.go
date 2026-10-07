@@ -1,6 +1,7 @@
 package normalize
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -267,6 +268,16 @@ func TestInventoryNeo4jCache(t *testing.T) {
 	id = resolver.Resolve("10.25.40.207", "", "", "", "")
 	require.Equal(t, "nxtegn-test-02", id.Hostname)
 	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Neo4j again")
+}
+
+func TestInventoryResolverClose(t *testing.T) {
+	resolver := NewInventoryResolver(InventoryConfig{Neo4jEndpoint: "bolt://127.0.0.1:1"})
+	require.NoError(t, resolver.Close(context.Background()))
+
+	_, err := resolver.neo4jDriver()
+	require.NoError(t, err)
+	require.NoError(t, resolver.Close(context.Background()))
+	require.NoError(t, resolver.Close(context.Background()))
 }
 
 func TestInventoryNegativeCache(t *testing.T) {

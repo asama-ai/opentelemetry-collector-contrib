@@ -342,7 +342,15 @@ func createLogsProcessor(
 		nextConsumer,
 		proc.ProcessLogs,
 		processorhelper.WithCapabilities(processorCapabilities),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
+}
+
+func (p *normalizeProcessor) shutdown(ctx context.Context) error {
+	if p.inventory == nil {
+		return nil
+	}
+	return p.inventory.Close(ctx)
 }
 
 func firstNonEmptyStr(values ...string) string {
