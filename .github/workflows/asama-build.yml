@@ -1,10 +1,12 @@
 name: build-custom-docker-images
 
+# GHCR: otel-collector + otel-exporter. Plain v* / v*-test only.
+# -asama-host-* → publish-asama-host-otelcol.yml
+# -asama-central-* → asama-build-and-publish.yml (Pulp container)
 on:
   push:
     tags:
-      - 'v*'   # Trigger on version tags
-      - 'v*-test'  # Also trigger on test version tags
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -17,7 +19,7 @@ env:
 
 jobs:
   build-collector:
-    # Host-agent collector debs use vX.Y.Z-asama-* tags; skip GHCR image jobs for those.
+    # Skip host (-asama-host-) and central (-asama-central-) tags; they contain -asama.
     if: ${{ github.event_name != 'push' || !contains(github.ref_name, '-asama') }}
     timeout-minutes: 30
     runs-on: ubuntu-24.04
@@ -86,6 +88,7 @@ jobs:
         run: rm ./cmd/otel-collector/otel-collector
 
   build-exporter:
+    # Same skip as build-collector: host and central tags include -asama.
     if: ${{ github.event_name != 'push' || !contains(github.ref_name, '-asama') }}
     timeout-minutes: 30
     runs-on: ubuntu-24.04

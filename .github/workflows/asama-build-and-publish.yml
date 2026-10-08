@@ -1,9 +1,11 @@
 name: Publish OpenTelemetry Collector Image to Pulp
 
+# Central collector image → Pulp registry. Not host debs, not GHCR.
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-asama-central-*'
+      - 'v*-asama-central'
   workflow_dispatch:
 
 permissions:

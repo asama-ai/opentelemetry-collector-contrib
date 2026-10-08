@@ -1,15 +1,16 @@
 # Asama-only. Builds asama-otel-collector (host ingest :4319). Does not replace asama-build.yml.
+# Tags must include -asama-host- so they do not overlap GHCR (plain v*) or Pulp images (-asama-central-).
 name: Publish asama-otel-collector
 
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*-asama-*"
-      - "v[0-9]*.[0-9]*.[0-9]*-asama.*"
+      - "v[0-9]*.[0-9]*.[0-9]*-asama-host-*"
+      - "v[0-9]*.[0-9]*.[0-9]*-asama-host.*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Without v: 0.141.0-asama-test-001 (testing Pulp) or 0.141.0-asama-001 (production Pulp)"
+        description: "Without v: 0.141.0-asama-host-test-001 (testing Pulp) or 0.141.0-asama-host-001 (production Pulp)"
         required: true
 
 permissions:
@@ -40,18 +41,18 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             raw="${tag#v}"
           fi
-          # Match -asama-test- before -asama- so "test" is a channel, not a build number.
-          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-test[-.]([0-9]+)$ ]]; then
+          # Match -asama-host-test- before -asama-host- so "test" is a channel, not a build number.
+          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-host-test[-.]([0-9]+)$ ]]; then
             upstream="${BASH_REMATCH[1]}"
             asama_n="${BASH_REMATCH[2]}"
             channel=test
-          elif [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama[-.]([0-9]+)$ ]]; then
+          elif [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-host[-.]([0-9]+)$ ]]; then
             upstream="${BASH_REMATCH[1]}"
             asama_n="${BASH_REMATCH[2]}"
             channel=prod
           else
-            echo "ERROR: version '$raw' must be X.Y.Z-asama-test-N (testing) or X.Y.Z-asama-N (production)"
-            echo "example git tags: v0.141.0-asama-test-001  v0.141.0-asama-001"
+            echo "ERROR: version '$raw' must be X.Y.Z-asama-host-test-N (testing) or X.Y.Z-asama-host-N (production)"
+            echo "example git tags: v0.141.0-asama-host-test-001  v0.141.0-asama-host-001"
             exit 1
           fi
           # Debian: one hyphen (upstream - revision). RPM Version cannot contain '-'.
