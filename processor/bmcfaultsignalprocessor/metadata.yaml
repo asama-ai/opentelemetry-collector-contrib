@@ -1,0 +1,10 @@
+type: bmcfaultsignal
+
+status:
+  class: processor
+  stability:
+    logs: alpha
+  distributions: []
+
+tests:
+  config:

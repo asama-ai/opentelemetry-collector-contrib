@@ -1,7 +1,7 @@
 dist:
   module: github.com/open-telemetry/opentelemetry-collector-contrib/cmd/otel-collector
   name: otel-collector
-  description: "OpenTelemetry Collector Contrib - Stage 2: OTLP + configfile + Redfish receivers, configwatch_snapshot + inventorydiff + Batch + Filter processors, OTLP HTTP + Prometheus remote write + ClickHouse exporters"
+  description: "OpenTelemetry Collector Contrib - Stage 2: OTLP + Prometheus scrape + configfile + Redfish receivers, configwatch_snapshot + inventorydiff + Batch + Filter processors, OTLP HTTP + Prometheus remote write + ClickHouse exporters"
   version: 0.141.0
   output_path: ./cmd/otel-collector
 
@@ -10,6 +10,7 @@ receivers:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/configfilereceiver v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfisheventreceiver v0.141.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redfishlogreceiver v0.141.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.141.0
 
 extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.141.0

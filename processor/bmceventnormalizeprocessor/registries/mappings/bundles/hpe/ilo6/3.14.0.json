@@ -1,0 +1,330 @@
+{
+  "schema_version": "2.0.0",
+  "bundle_id": "hpe.ilo6.3.14.0",
+  "vendor": "hpe",
+  "bmc_family": "ilo",
+  "bmc_model": "ilo6",
+  "firmware_version": "3.14.0",
+  "registry": {
+    "prefix": "iLOEvents",
+    "version": "3.14.0",
+    "primary_file": "iloevents.json"
+  },
+  "asama_registry_prefix": "AsamaBmc",
+  "asama_registry_version": "1.0.0",
+  "test_reference": {
+    "bmc_ip": "10.25.40.207",
+    "registry_dir": "nxtgen-test-02-hpe-10.25.40.207"
+  },
+  "fault_pairs": [
+    {
+      "asama_id": "power.psu.failure",
+      "asama_message_key": "PowerPsuFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "power.redundancy.lost",
+      "asama_message_key": "PowerRedundancyLost",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.PowerRedundancyLost",
+          "vendor_key": "PowerRedundancyLost",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "iloevents.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.PowerRedundancyRestored",
+          "vendor_key": "PowerRedundancyRestored",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "iloevents.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "power.input.lost",
+      "asama_message_key": "PowerInputLost",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "thermal.threshold.critical",
+      "asama_message_key": "ThermalThresholdCritical",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "thermal.threshold.warning",
+      "asama_message_key": "ThermalThresholdWarning",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "thermal.shutdown",
+      "asama_message_key": "ThermalShutdown",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "fan.failure",
+      "asama_message_key": "FanFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": [],
+      "deassert_hints": [
+        "FanOk"
+      ]
+    },
+    {
+      "asama_id": "fan.redundancy.lost",
+      "asama_message_key": "FanRedundancyLost",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.FanRedundancyLost",
+          "vendor_key": "FanRedundancyLost",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "iloevents.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.FanRedundancyRestored",
+          "vendor_key": "FanRedundancyRestored",
+          "arg_map": [],
+          "vendor_number_of_args": 0,
+          "source_registry": "iloevents.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "processor.thermal.trip",
+      "asama_message_key": "ProcessorThermalTrip",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "processor.failure",
+      "asama_message_key": "ProcessorFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "memory.uncorrectable_error",
+      "asama_message_key": "MemoryUncorrectableError",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "memory.correctable_error",
+      "asama_message_key": "MemoryCorrectableError",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "memory.dimm.failure",
+      "asama_message_key": "MemoryDimmFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "storage.drive.failure",
+      "asama_message_key": "StorageDriveFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveFailed",
+          "vendor_key": "DriveFailed",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "iloevents.json"
+        },
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveFailed2",
+          "vendor_key": "DriveFailed2",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "iloevents.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveOk",
+          "vendor_key": "DriveOk",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "iloevents.json"
+        },
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveOk2",
+          "vendor_key": "DriveOk2",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "iloevents.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "storage.drive.predictive_failure",
+      "asama_message_key": "StorageDrivePredictiveFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveSmartError",
+          "vendor_key": "DriveSmartError",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "iloevents.json"
+        },
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveSmartError2",
+          "vendor_key": "DriveSmartError2",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "iloevents.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveWearStatusOk",
+          "vendor_key": "DriveWearStatusOk",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "iloevents.json"
+        },
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DriveWearStatusOk2",
+          "vendor_key": "DriveWearStatusOk2",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "iloevents.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "storage.array.degraded",
+      "asama_message_key": "StorageArrayDegraded",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": [],
+      "deassert_hints": [
+        "DrvArrOK",
+        "DrvArrControllerOK"
+      ]
+    },
+    {
+      "asama_id": "storage.controller.failure",
+      "asama_message_key": "StorageControllerFailure",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DrvArrControllerFailed",
+          "vendor_key": "DrvArrControllerFailed",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "iloevents.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.DrvArrControllerOK",
+          "vendor_key": "DrvArrControllerOK",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 1,
+          "source_registry": "iloevents.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "network.link.down",
+      "asama_message_key": "NetworkLinkDown",
+      "component_arg_index": 1,
+      "assert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.NicConnectivityLost",
+          "vendor_key": "NicConnectivityLost",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "iloevents.json"
+        }
+      ],
+      "deassert_mappings": [
+        {
+          "vendor_message_id": "iLOEvents.3.14.0.NicConnectivityRestored",
+          "vendor_key": "NicConnectivityRestored",
+          "arg_map": [
+            1
+          ],
+          "vendor_number_of_args": 2,
+          "source_registry": "iloevents.json"
+        }
+      ]
+    },
+    {
+      "asama_id": "firmware.update.failed",
+      "asama_message_key": "FirmwareUpdateFailed",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "bmc.health.degraded",
+      "asama_message_key": "BmcHealthDegraded",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "resource.status.critical",
+      "asama_message_key": "ResourceStatusCritical",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    },
+    {
+      "asama_id": "resource.status.warning",
+      "asama_message_key": "ResourceStatusWarning",
+      "component_arg_index": 1,
+      "assert_mappings": [],
+      "deassert_mappings": []
+    }
+  ]
+}

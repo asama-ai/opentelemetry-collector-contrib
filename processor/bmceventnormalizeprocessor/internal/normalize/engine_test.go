@@ -1,0 +1,329 @@
+package normalize
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"runtime"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+func registriesRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "registries"))
+}
+
+func TestNormalizeHPEDriveFailed(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	result := engine.Normalize(
+		"hpe",
+		"iLOEvents.3.14.0.DriveFailed",
+		"Drive failed",
+		"Critical",
+		"10.0.0.1",
+		"ilo6",
+		"3.14.0",
+		"",
+		"2026-06-08T12:00:00Z",
+		[]string{"Bay 1"},
+	)
+	require.Equal(t, "mapped", result.MappingStatus)
+	require.Equal(t, "storage.drive.failure", result.AsamaID)
+	require.Equal(t, "assert", result.Lifecycle)
+	require.Contains(t, result.Message, "Bay 1")
+}
+
+func TestLookupByIndexIP(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	id, ok := engine.lookupByIndexIP("10.25.40.207")
+	require.True(t, ok)
+	require.Equal(t, "hpe", id.Vendor)
+	require.Equal(t, "ilo6", id.BMCModel)
+	require.Equal(t, "3.14.0", id.FirmwareVersion)
+	require.Equal(t, "hpe.ilo6.3.14.0", id.BundleID)
+}
+
+func TestLookupByUniqueMessageID(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	id, ok := engine.lookupByUniqueMessageID("iLOEvents.3.14.0.DriveFailed")
+	require.True(t, ok)
+	require.Equal(t, "hpe", id.Vendor)
+	require.Equal(t, "hpe.ilo6.3.14.0", id.BundleID)
+}
+
+func TestInventoryResolveIndexIP(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		IndexIPLookup:     true,
+		MessageIDFallback: true,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.206", "", "", "", "")
+	require.Equal(t, "dell", id.Vendor)
+	require.Equal(t, "idrac9", id.BMCModel)
+	require.Equal(t, identitySourceIndexIP, id.Source)
+}
+
+func TestInventoryResolveMessageIDFallback(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		IndexIPLookup:     false,
+		MessageIDFallback: true,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("", "iLOEvents.3.14.0.DriveFailed", "", "", "")
+	require.Equal(t, "hpe", id.Vendor)
+	require.Equal(t, identitySourceMessageID, id.Source)
+}
+
+func TestInventoryResolvePrometheus(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"status":"success",
+			"data":{"result":[{"metric":{
+				"manufacturer":"HPE",
+				"model":"iLO 5",
+				"firmware_version":"iLO 5 v3.08",
+				"hostname":"nxtegn-test-02",
+				"serial_number":"SGH810WXP1",
+				"instance":"10.25.40.207"
+			}}]}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		PrometheusEndpoint: srv.URL,
+		PrometheusQuery:    `redfish_bmc_manager_info{instance="$IP"}`,
+		IndexIPLookup:      false,
+		MessageIDFallback:  false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "hpe", id.Vendor)
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, "SGH810WXP1", id.SerialNumber)
+	require.Equal(t, identitySourcePrometheus, id.Source)
+	// iLO 5 firmware label may not match ilo6/3.14.0 bundle; index_ip still resolves bundle at runtime.
+}
+
+func TestInventoryPrometheusCache(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{
+			"status":"success",
+			"data":{"result":[{"metric":{
+				"manufacturer":"HPE",
+				"hostname":"nxtegn-test-02",
+				"instance":"10.25.40.207"
+			}}]}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		PrometheusEndpoint: srv.URL,
+		PrometheusQuery:    `redfish_bmc_manager_info{instance="$IP"}`,
+		PrometheusCacheTTL: time.Hour,
+		IndexIPLookup:      false,
+		MessageIDFallback:  false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls)
+
+	id = resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Prometheus again")
+}
+
+func TestInventoryResolveNeo4j(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Contains(t, r.URL.Path, "/db/neo4j/tx/commit")
+		_, _ = w.Write([]byte(`{
+			"results":[{"columns":["hostname","serial_number","manufacturer","model","firmware_version"],"data":[{"row":["nxtegn-test-02","SGH810WXP1","HPE","iLO 5","iLO 5 v3.08"]}]}],
+			"errors":[]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		Neo4jEndpoint:     srv.URL,
+		Neo4jDatabase:     "neo4j",
+		IndexIPLookup:     false,
+		MessageIDFallback: false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "hpe", id.Vendor)
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, "SGH810WXP1", id.SerialNumber)
+	require.Equal(t, identitySourceNeo4j, id.Source)
+}
+
+func TestInventoryNeo4jCache(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte(`{
+			"results":[{"columns":["hostname","manufacturer"],"data":[{"row":["nxtegn-test-02","HPE"]}]}],
+			"errors":[]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		Neo4jEndpoint:     srv.URL,
+		Neo4jCacheTTL:     time.Hour,
+		IndexIPLookup:     false,
+		MessageIDFallback: false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls)
+
+	id = resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Equal(t, "nxtegn-test-02", id.Hostname)
+	require.Equal(t, 1, calls, "second resolve within cache TTL should not call Neo4j again")
+}
+
+func TestInventoryResolverClose(t *testing.T) {
+	resolver := NewInventoryResolver(InventoryConfig{Neo4jEndpoint: "bolt://127.0.0.1:1"})
+	require.NoError(t, resolver.Close(context.Background()))
+
+	_, err := resolver.neo4jDriver()
+	require.NoError(t, err)
+	require.NoError(t, resolver.Close(context.Background()))
+	require.NoError(t, resolver.Close(context.Background()))
+}
+
+func TestInventoryNegativeCache(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	resolver := NewInventoryResolver(InventoryConfig{
+		PrometheusEndpoint: srv.URL,
+		PrometheusQuery:    `redfish_bmc_manager_info{instance="$IP"}`,
+		IndexIPLookup:      false,
+		MessageIDFallback:  false,
+	})
+	resolver.SetEngine(engine)
+
+	id := resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Empty(t, id.Vendor)
+	require.Empty(t, id.Source)
+	require.Equal(t, 1, calls)
+
+	id = resolver.Resolve("10.25.40.207", "", "", "", "")
+	require.Empty(t, id.Vendor)
+	require.Equal(t, 1, calls, "failed lookup should be cached so the next resolve skips the network")
+}
+
+func TestMatchBundleFromLabels(t *testing.T) {
+	root := registriesRoot(t)
+	engine, err := NewEngine(
+		filepath.Join(root, "asama-bmc-events.json"),
+		filepath.Join(root, "mappings/index.json"),
+		filepath.Join(root, "mappings"),
+	)
+	require.NoError(t, err)
+
+	id, ok := engine.matchBundleFromLabels("HPE", "iLO 6", "3.14.0")
+	require.True(t, ok)
+	require.Equal(t, "hpe.ilo6.3.14.0", id.BundleID)
+}
