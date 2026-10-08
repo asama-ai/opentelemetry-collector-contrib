@@ -1,9 +1,12 @@
 name: Publish OpenTelemetry Collector Image to Pulp
 
+# Pulp container image for the central collector (cmd/otel-collector).
+# Host debs use -asama-host-*; GHCR uses plain v* / v*-test (no host/central).
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-asama-central-*'
+      - 'v*-asama-central'
   workflow_dispatch:
 
 permissions:
