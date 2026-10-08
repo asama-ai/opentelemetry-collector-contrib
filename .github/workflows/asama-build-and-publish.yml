@@ -1,0 +1,64 @@
+name: Publish OpenTelemetry Collector Image to Pulp
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive image name and version
+        id: image
+        env:
+          REGISTRY: ${{ secrets.PULP_CONTAINER_REGISTRY }}
+        run: |
+          test -n "$REGISTRY" || { echo "PULP_CONTAINER_REGISTRY secret is required" >&2; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          echo "image=$REGISTRY/asama-container/otel-collector:$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: oldstable
+          cache-dependency-path: "**/*.sum"
+
+      - name: Install dependencies
+        run: make -j2 gomoddownload
+
+      - name: Install Tools
+        run: make install-tools
+
+      - name: Generate collector code
+        run: ./.tools/builder --skip-compilation --config cmd/otel-collector/builder-config.yaml
+
+      - name: Build binary
+        run: |
+          cd ./cmd/otel-collector && \
+          GO111MODULE=on CGO_ENABLED=0 go build -trimpath \
+            -o otel-collector \
+            -tags "" .
+
+      - name: Build OpenTelemetry Collector image
+        run: |
+          docker build \
+            --tag "${{ steps.image.outputs.image }}" ./cmd/otel-collector
+
+      - name: Smoke test OpenTelemetry Collector image
+        run: docker run --rm "${{ steps.image.outputs.image }}" --help || true
+
+      - name: Authenticate to Pulp container registry
+        env:
+          REGISTRY: ${{ secrets.PULP_CONTAINER_REGISTRY }}
+          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
+          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
+        run: printf '%s' "$PULP_PASSWORD" | docker login "$REGISTRY" --username "$PULP_USERNAME" --password-stdin
+
+      - name: Push versioned image
+        run: docker push "${{ steps.image.outputs.image }}"
