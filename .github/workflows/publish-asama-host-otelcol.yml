@@ -1,15 +1,16 @@
 # Asama-only. Builds asama-otel-collector (host ingest :4319). Does not replace asama-build.yml.
+# Tags must include -asama-host- so they do not overlap GHCR (plain v*) or Pulp images (-asama-central-).
 name: Publish asama-otel-collector
 
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*-asama-*"
-      - "v[0-9]*.[0-9]*.[0-9]*-asama.*"
+      - "v[0-9]*.[0-9]*.[0-9]*-asama-host-*"
+      - "v[0-9]*.[0-9]*.[0-9]*-asama-host.*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Without v: 0.141.0-asama-test-001 (testing Pulp) or 0.141.0-asama-001 (production Pulp)"
+        description: "Without v: 0.141.0-asama-host-test-001 (testing Pulp) or 0.141.0-asama-host-001 (production Pulp)"
         required: true
 
 permissions:
@@ -40,32 +41,34 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             raw="${tag#v}"
           fi
-          # Match -asama-test- before -asama- so "test" is a channel, not a build number.
-          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-test[-.]([0-9]+)$ ]]; then
+          # Match -asama-host-test- before -asama-host- so "test" is a channel, not a build number.
+          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-host-test[-.]([0-9]+)$ ]]; then
             upstream="${BASH_REMATCH[1]}"
             asama_n="${BASH_REMATCH[2]}"
             channel=test
-          elif [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama[-.]([0-9]+)$ ]]; then
+          elif [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-host[-.]([0-9]+)$ ]]; then
             upstream="${BASH_REMATCH[1]}"
             asama_n="${BASH_REMATCH[2]}"
             channel=prod
           else
-            echo "ERROR: version '$raw' must be X.Y.Z-asama-test-N (testing) or X.Y.Z-asama-N (production)"
-            echo "example git tags: v0.141.0-asama-test-001  v0.141.0-asama-001"
+            echo "ERROR: version '$raw' must be X.Y.Z-asama-host-test-N (testing) or X.Y.Z-asama-host-N (production)"
+            echo "example git tags: v0.141.0-asama-host-test-001  v0.141.0-asama-host-001"
             exit 1
           fi
           # Debian: one hyphen (upstream - revision). RPM Version cannot contain '-'.
+          # Same Pulp layout as asama-inc/host-agent publish-otel-collector.yml:
+          # one deb repo, Apt component test vs main; rpm vs rpm-test.
+          echo "DEB_REPOSITORY=deb" >> "$GITHUB_ENV"
           if [ "$channel" = test ]; then
             rev="asama.test.${asama_n}"
-            # Testing secrets only. Do not fall back to PULP_*_REPO_NAME (that sent test tags to production).
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
-            echo "Pulp channel=test deb=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }} rpm=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}"
+            echo "DEB_COMPONENT=test" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=rpm-test" >> "$GITHUB_ENV"
+            echo "Pulp channel=test deb=deb component=test rpm=rpm-test"
           else
             rev="asama.${asama_n}"
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}" >> "$GITHUB_ENV"
-            echo "Pulp channel=prod deb=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }} rpm=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}"
+            echo "DEB_COMPONENT=main" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=rpm" >> "$GITHUB_ENV"
+            echo "Pulp channel=prod deb=deb component=main rpm=rpm"
           fi
           echo "DEB_VERSION=${upstream}-${rev}" >> "$GITHUB_ENV"
           echo "RPM_VERSION=${upstream}" >> "$GITHUB_ENV"
@@ -170,7 +173,11 @@ jobs:
             echo "Pulp credentials incomplete; skip Pulp upload"
             exit 0
           fi
-          asama-packaging/scripts/pulp-asama.sh deb content upload --repository "$DEB_REPOSITORY" --file "deb/asama-otel-collector_${DEB_VERSION}-1_amd64.deb"
+          asama-packaging/scripts/pulp-asama.sh deb content upload \
+            --repository "$DEB_REPOSITORY" \
+            --file "deb/asama-otel-collector_${DEB_VERSION}-1_amd64.deb" \
+            --distribution generic \
+            --component "$DEB_COMPONENT"
           asama-packaging/scripts/pulp-asama.sh deb publication create --repository "$DEB_REPOSITORY" --signing-service "$PULP_DEB_SIGNING_SERVICE"
           find ~/rpmbuild/RPMS -name 'asama-otel-collector-*.rpm' -print0 | xargs -0 -r -n1 -I{} asama-packaging/scripts/pulp-asama.sh rpm content upload --repository "$RPM_REPOSITORY" --file '{}'
           asama-packaging/scripts/pulp-asama.sh rpm publication create --repository "$RPM_REPOSITORY"

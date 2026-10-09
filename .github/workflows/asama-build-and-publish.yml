@@ -1,0 +1,88 @@
+name: Publish OpenTelemetry Collector Image to Pulp
+
+# Central collector image → Pulp registry. Not host debs, not GHCR.
+on:
+  push:
+    tags:
+      - 'v*-asama-central-*'
+      - 'v*-asama-central'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive image name and version
+        id: image
+        env:
+          REGISTRY: ${{ secrets.PULP_CONTAINER_REGISTRY }}
+        run: |
+          set -euo pipefail
+          test -n "$REGISTRY" || { echo "PULP_CONTAINER_REGISTRY secret is required" >&2; exit 1; }
+          # workflow_dispatch on a branch would otherwise publish :main / :branch-name.
+          # Strict charset avoids shell metacharacters in later steps that consume the image name.
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "ERROR: ref must be a tag matching v*-asama-central or v*-asama-central-* (got ${GITHUB_REF})" >&2
+            exit 1
+          fi
+          if [[ ! "$tag" =~ ^v[0-9A-Za-z._-]+-asama-central(-[0-9A-Za-z._-]+)?$ ]]; then
+            echo "ERROR: tag '$tag' must match v<safe>-asama-central or v<safe>-asama-central-<safe>" >&2
+            echo "allowed characters after v/: alphanumeric, '.', '_', '-'" >&2
+            exit 1
+          fi
+          # Registry host/path from secrets; tag segment already charset-validated.
+          if [[ ! "$REGISTRY" =~ ^[0-9A-Za-z._:/-]+$ ]]; then
+            echo "ERROR: PULP_CONTAINER_REGISTRY has unexpected characters" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "image=${REGISTRY}/asama-container/otel-collector:${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: oldstable
+          cache-dependency-path: "**/*.sum"
+
+      - name: Install dependencies
+        run: make -j2 gomoddownload
+
+      - name: Install Tools
+        run: make install-tools
+
+      - name: Generate collector code
+        run: ./.tools/builder --skip-compilation --config cmd/otel-collector/builder-config.yaml
+
+      - name: Build binary
+        run: |
+          cd ./cmd/otel-collector && \
+          GO111MODULE=on CGO_ENABLED=0 go build -trimpath \
+            -o otel-collector \
+            -tags "" .
+
+      - name: Build OpenTelemetry Collector image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: docker build --tag "$IMAGE" ./cmd/otel-collector
+
+      - name: Smoke test OpenTelemetry Collector image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: docker run --rm "$IMAGE" --help
+
+      - name: Authenticate to Pulp container registry
+        env:
+          REGISTRY: ${{ secrets.PULP_CONTAINER_REGISTRY }}
+          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
+          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
+        run: printf '%s' "$PULP_PASSWORD" | docker login "$REGISTRY" --username "$PULP_USERNAME" --password-stdin
+
+      - name: Push versioned image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: docker push "$IMAGE"
