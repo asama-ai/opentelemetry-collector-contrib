@@ -22,8 +22,15 @@ jobs:
         env:
           REGISTRY: ${{ secrets.PULP_CONTAINER_REGISTRY }}
         run: |
+          set -euo pipefail
           test -n "$REGISTRY" || { echo "PULP_CONTAINER_REGISTRY secret is required" >&2; exit 1; }
-          version="${GITHUB_REF_NAME#v}"
+          # workflow_dispatch on a branch would otherwise publish :main / :branch-name.
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" != refs/tags/* ]] || { [[ "$tag" != v*-asama-central ]] && [[ "$tag" != v*-asama-central-* ]]; }; then
+            echo "ERROR: ref must be a tag matching v*-asama-central or v*-asama-central-* (got ${GITHUB_REF})" >&2
+            exit 1
+          fi
+          version="${tag#v}"
           echo "image=$REGISTRY/asama-container/otel-collector:$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v5
@@ -53,7 +60,7 @@ jobs:
             --tag "${{ steps.image.outputs.image }}" ./cmd/otel-collector
 
       - name: Smoke test OpenTelemetry Collector image
-        run: docker run --rm "${{ steps.image.outputs.image }}" --help || true
+        run: docker run --rm "${{ steps.image.outputs.image }}" --help
 
       - name: Authenticate to Pulp container registry
         env:
