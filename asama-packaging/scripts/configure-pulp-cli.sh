@@ -2,8 +2,22 @@
 set -euo pipefail
 
 : "${PULP_BASE_URL:?PULP_BASE_URL is required}"
-: "${PULP_USERNAME:?PULP_USERNAME is required}"
-: "${PULP_PASSWORD:?PULP_PASSWORD is required}"
+: "${PULP_REMOTE_USER:?PULP_REMOTE_USER is required}"
+
+# Nginx authenticates this identity and sets REMOTE-USER for Pulp.
+# Do not send Pulp basic-auth credentials from CI.
+if [[ ! "$PULP_REMOTE_USER" =~ ^[A-Za-z0-9._+@-]+$ ]]; then
+  echo "ERROR: invalid PULP_REMOTE_USER" >&2
+  exit 1
+fi
+if [ -n "${PULP_GITHUB_ACTOR:-}" ] && [[ ! "$PULP_GITHUB_ACTOR" =~ ^[A-Za-z0-9-]+$ ]]; then
+  echo "ERROR: invalid PULP_GITHUB_ACTOR" >&2
+  exit 1
+fi
+if [ -n "${PULP_USER_EMAIL:-}" ] && [[ ! "$PULP_USER_EMAIL" =~ ^[A-Za-z0-9._+@-]+$ ]]; then
+  echo "ERROR: invalid PULP_USER_EMAIL" >&2
+  exit 1
+fi
 
 export PATH="$HOME/.local/bin:$PATH"
 if [ -n "${GITHUB_PATH:-}" ]; then
@@ -21,15 +35,9 @@ path_part=$(printf '%s' "$raw_url" | sed -E 's|^https?://[^/]+(/.*)?$|\1|')
 
 if [ -n "${PULP_API_ROOT:-}" ]; then
   api_root="$PULP_API_ROOT"
-elif echo "$path_part" | grep -q "pulpui"; then
-  api_root="/pulpui/pulp/"
 elif [ -n "$path_part" ] && [ "$path_part" != "/" ]; then
-  clean_path=$(printf '%s' "$path_part" | sed -E 's|^/*|/|; s|/*$|/|')
-  if [[ "$clean_path" == */pulp/ ]]; then
-    api_root="$clean_path"
-  else
-    api_root="${clean_path}pulp/"
-  fi
+  # The path in PULP_BASE_URL is the API root. Do not append /pulp/.
+  api_root=$(printf '%s' "$path_part" | sed -E 's|^/*|/|; s|/*$|/|')
 else
   api_root="/pulp/"
 fi
@@ -48,27 +56,39 @@ cfg_home="${HOME}/.config/pulp/cli.toml"
 
 # Bare `format = json` is invalid TOML; pulp-cli then uses default api_root=/pulp/
 # and Console Dex-redirects /pulp/api/v3/status/.
-python3 - "$cfg_home" "$click_cfg" "$base_url" "$api_root" "$PULP_USERNAME" "$verify_ssl" << 'PY'
-import os
+python3 - "$cfg_home" "$click_cfg" "$base_url" "$api_root" "$PULP_REMOTE_USER" "${PULP_GITHUB_ACTOR:-}" "${PULP_USER_EMAIL:-}" "$verify_ssl" << 'PY'
 import sys
 from pathlib import Path
 
-cfg_home, click_cfg, base_url, api_root, username, verify_ssl = sys.argv[1:]
-password = os.environ["PULP_PASSWORD"]
+cfg_home, click_cfg, base_url, api_root, remote_user, actor, email, verify_ssl = sys.argv[1:]
 try:
     import tomli_w
 except ImportError:
     tomli_w = None
 
+# Nginx pulp-ci-auth.lua validates X-Asama-User-Email with CISS, then sets
+# REMOTE-USER. pulp-cli raises "No suitable auth scheme found" unless some
+# Authorization header is present, because Pulp's OpenAPI spec still lists
+# basic auth. The value is not a Pulp password. The publish location clears
+# Authorization before the request reaches Pulp.
+publisher = email or remote_user
+if "@" not in publisher:
+    raise SystemExit("publisher email is required for CISS validation")
+headers = [
+    f"X-Asama-User-Email:{publisher}",
+    "Authorization:Bearer external",
+]
+if actor:
+    headers.append(f"X-Asama-GitHub-Actor:{actor}")
+
 doc = {
     "cli": {
         "base_url": base_url,
-        "username": username,
-        "password": password,
         "api_root": api_root,
         "domain": "default",
         "verify_ssl": verify_ssl == "true",
         "format": "json",
+        "headers": headers,
     }
 }
 if tomli_w is None:
@@ -83,7 +103,7 @@ for path in {cfg_home, click_cfg}:
     print(f"Wrote {p}")
 PY
 
-echo "Configured Pulp CLI (password omitted):"
+echo "Configured Pulp CLI (no basic-auth credentials):"
 python3 - "$cfg_home" << 'PY'
 import sys
 from pathlib import Path
@@ -92,7 +112,6 @@ try:
 except ImportError:
     import tomli as tomllib
 cfg = tomllib.loads(Path(sys.argv[1]).read_text())
-cfg.get("cli", {}).pop("password", None)
 for k, v in cfg.get("cli", {}).items():
     print(f"  {k} = {v!r}")
 PY
@@ -111,7 +130,7 @@ if command -v pulp >/dev/null 2>&1; then
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   "$SCRIPT_DIR/pulp-asama.sh" status || {
     echo "ERROR: 'pulp status' failed to connect to Pulp at ${base_url}${api_root}" >&2
-    echo "Hint: Console serves Pulp at /pulpui/pulp/; /pulp/ is Dex. Pass --api-root, not only cli.toml." >&2
+    echo "Hint: PULP_BASE_URL must include the nginx API path. /pulp/ on this host is Dex." >&2
     exit 1
   }
 else

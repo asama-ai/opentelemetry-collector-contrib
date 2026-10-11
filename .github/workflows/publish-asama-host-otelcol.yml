@@ -148,14 +148,39 @@ jobs:
             deb/asama-otel-collector_${{ env.DEB_VERSION }}-1_amd64.deb
             /home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector-${{ env.RPM_VERSION }}-${{ env.RPM_RELEASE }}*.x86_64.rpm
 
+      - name: Resolve Pulp remote user
+        env:
+          PUSHER_EMAIL: ${{ github.event.pusher.email }}
+          HEAD_AUTHOR_EMAIL: ${{ github.event.head_commit.author.email }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Email comes from GitHub, never from a repo secret.
+          # Tag pushes use the pusher address. Manual runs fall through to
+          # the actor's public profile, then the commit author GitHub recorded.
+          email="${PUSHER_EMAIL:-}"
+          if [ -z "$email" ]; then
+            email="${HEAD_AUTHOR_EMAIL:-}"
+          fi
+          if [ -z "$email" ]; then
+            email="$(gh api "users/${GITHUB_ACTOR}" --jq '.email // empty' || true)"
+          fi
+          if [ -z "$email" ]; then
+            email="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" --jq '.commit.author.email // empty' || true)"
+          fi
+          if [ -z "$email" ] || [ "$email" = "null" ]; then
+            echo "ERROR: GitHub did not provide a publisher email" >&2
+            exit 1
+          fi
+          echo "PULP_REMOTE_USER=${email}" >> "$GITHUB_ENV"
+          echo "PULP_USER_EMAIL=${email}" >> "$GITHUB_ENV"
+          echo "PULP_GITHUB_ACTOR=${GITHUB_ACTOR}" >> "$GITHUB_ENV"
+
       - name: Install and configure Pulp CLI
         env:
           PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
-          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
-          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
         run: |
-          if [ -z "${PULP_BASE_URL:-}" ] || [ -z "${PULP_USERNAME:-}" ] || [ -z "${PULP_PASSWORD:-}" ]; then
-            echo "Pulp credentials incomplete; skip Pulp"
+          if [ -z "${PULP_BASE_URL:-}" ]; then
+            echo "PULP_BASE_URL is unset; skip Pulp"
             exit 0
           fi
           # RPM CLI lives in pulp-cli; pulp-cli-rpm is not published on PyPI.
@@ -166,11 +191,9 @@ jobs:
         env:
           PULP_DEB_SIGNING_SERVICE: ${{ secrets.PULP_DEB_SIGNING_SERVICE || 'asama-deb-signer' }}
           PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
-          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
-          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
         run: |
-          if [ -z "${PULP_BASE_URL:-}" ] || [ -z "${PULP_USERNAME:-}" ] || [ -z "${PULP_PASSWORD:-}" ]; then
-            echo "Pulp credentials incomplete; skip Pulp upload"
+          if [ -z "${PULP_BASE_URL:-}" ]; then
+            echo "PULP_BASE_URL is unset; skip Pulp upload"
             exit 0
           fi
           asama-packaging/scripts/pulp-asama.sh deb content upload \
