@@ -167,8 +167,8 @@ jobs:
           if [ -z "$email" ]; then
             email="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" --jq '.commit.author.email // empty' || true)"
           fi
-          if [ -z "$email" ] || [ "$email" = "null" ]; then
-            echo "ERROR: GitHub did not provide a publisher email" >&2
+          if ! [[ "$email" =~ ^[^[:space:]@]+@[^[:space:]@]+$ ]]; then
+            echo "ERROR: GitHub did not provide a valid publisher email" >&2
             exit 1
           fi
           echo "PULP_REMOTE_USER=${email}" >> "$GITHUB_ENV"
