@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Pulp CLI wrapper for Console: spec paths are /pulp/, the proxy is /pulpui/pulp/.
+"""Pulp CLI wrapper: OpenAPI paths are /pulp/; rewrite them to PULP_API_ROOT.
 
 pulp-cli --api-root is used to fetch api.json. Operation URLs in that spec are still
-/pulp/api/v3/..., which Dex owns on console.asama.cloud. Rewrite those requests.
+/pulp/api/v3/.... Rewrite those requests to the API root taken from PULP_BASE_URL.
 """
 from __future__ import annotations
 
