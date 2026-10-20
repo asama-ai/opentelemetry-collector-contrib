@@ -1,154 +1,264 @@
+# Build and push otel-collector and otel-exporter when a v* tag is created.
+# GHCR: ghcr.io/<owner>/otel-collector and ghcr.io/<owner>/otel-exporter
+# Private registry: console.asama.cloud/prod/<image> for production,
+# console.asama.cloud/test/<image> when the tag contains -test.
+
 name: build-custom-docker-images
 
 on:
   push:
     tags:
-      - 'v*'   # Trigger on version tags
-      - 'v*-test'  # Also trigger on test version tags
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   GOARCH: amd64
   GOOS: linux
+  GHCR_REGISTRY: ghcr.io
+  ASAMA_REGISTRY: console.asama.cloud
 
 jobs:
   build-collector:
-    # Host-agent collector debs use vX.Y.Z-asama-* tags; skip GHCR image jobs for those.
-    if: ${{ github.event_name != 'push' || !contains(github.ref_name, '-asama') }}
-    timeout-minutes: 30
+    name: Build & Publish otel-collector
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
       - uses: actions/setup-go@v5
         with:
           go-version: oldstable
           cache-dependency-path: "**/*.sum"
-      
+
       - name: Install dependencies
         run: make -j2 gomoddownload
-      
+
       - name: Install Tools
         run: make install-tools
-      
+
       - name: Generate collector code
         run: ./.tools/builder --skip-compilation --config cmd/otel-collector/builder-config.yaml
-      
+
       - name: Build binary
         run: |
           cd ./cmd/otel-collector && \
           GO111MODULE=on CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w" \
             -o ../../bin/otel-collector_${GOOS}_${GOARCH} \
             -tags "" .
-      
-      - name: Get version and image info
-        id: get_info
+
+      - name: Derive version and image tags
+        id: meta
         run: |
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,' | sed -e 's/^v//')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "owner=$OWNER" >> $GITHUB_OUTPUT
-          
-          if [[ ! "$VERSION" == *-test ]]; then
-            echo "set_latest=true" >> $GITHUB_OUTPUT
+          RAW_TAG="${GITHUB_REF_NAME}"
+          VERSION="${RAW_TAG#v}"
+          TAG="${VERSION}"
+          if [[ "$RAW_TAG" == *-test* ]]; then
+            RELEASE_TYPE="testing"
+            REGISTRY_NAMESPACE="test"
           else
-            echo "set_latest=false" >> $GITHUB_OUTPUT
+            RELEASE_TYPE="production"
+            REGISTRY_NAMESPACE="prod"
           fi
-      
+
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          GHCR_IMAGE="${GHCR_REGISTRY}/${OWNER}/otel-collector"
+          PRIVATE_IMAGE="${ASAMA_REGISTRY}/${REGISTRY_NAMESPACE}/otel-collector"
+
+          {
+            echo "tags<<EOF"
+            echo "${GHCR_IMAGE}:${TAG}"
+            if [ "$RELEASE_TYPE" = "production" ]; then
+              echo "${GHCR_IMAGE}:latest"
+              echo "${PRIVATE_IMAGE}:latest"
+            fi
+            echo "${PRIVATE_IMAGE}:${TAG}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "RELEASE_TYPE=${RELEASE_TYPE}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "GHCR_IMAGE=${GHCR_IMAGE}" >> "$GITHUB_ENV"
+          echo "PRIVATE_IMAGE=${PRIVATE_IMAGE}" >> "$GITHUB_ENV"
+
+          echo "GHCR image:     ${GHCR_IMAGE}:${TAG}"
+          echo "Registry image: ${PRIVATE_IMAGE}:${TAG}"
+          echo "Release Type:   ${RELEASE_TYPE}"
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
+      - name: Log in to container registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.ASAMA_REGISTRY }}
+          username: ${{ secrets.ASAMA_REGISTRY_USER }}
+          password: ${{ secrets.ASAMA_REGISTRY_PASSWORD }}
+
       - name: Prepare Docker context
         run: cp ./bin/otel-collector_${GOOS}_${GOARCH} ./cmd/otel-collector/otel-collector
-      
+
       - name: Build and push
-        uses: docker/build-push-action@v5
+        id: build
+        uses: docker/build-push-action@v7
         with:
           context: ./cmd/otel-collector
+          file: ./cmd/otel-collector/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.get_info.outputs.set_latest == 'true' && format('ghcr.io/{0}/otel-collector:{1},ghcr.io/{0}/otel-collector:latest', steps.get_info.outputs.owner, steps.get_info.outputs.version) || format('ghcr.io/{0}/otel-collector:{1}', steps.get_info.outputs.owner, steps.get_info.outputs.version) }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=otel-collector
+          cache-to: type=gha,mode=max,scope=otel-collector
+
       - name: Cleanup
         run: rm ./cmd/otel-collector/otel-collector
 
+      - name: Publish release summary
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          echo "### Release: otel-collector" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Attribute | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Image** | \`otel-collector\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Tag** | \`${TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Release Type** | \`${RELEASE_TYPE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **GHCR** | \`${GHCR_IMAGE}@${DIGEST}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Registry** | \`${PRIVATE_IMAGE}@${DIGEST}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Git Commit** | \`${GITHUB_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"
+
   build-exporter:
-    if: ${{ github.event_name != 'push' || !contains(github.ref_name, '-asama') }}
-    timeout-minutes: 30
+    name: Build & Publish otel-exporter
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
       - uses: actions/setup-go@v5
         with:
           go-version: oldstable
           cache-dependency-path: "**/*.sum"
-      
+
       - name: Install dependencies
         run: make -j2 gomoddownload
-      
+
       - name: Install Tools
         run: make install-tools
-      
+
       - name: Generate collector code
         run: ./.tools/builder --skip-compilation --config cmd/otel-exporter/builder-config.yaml
-      
+
       - name: Build binary
         run: |
           cd ./cmd/otel-exporter && \
           GO111MODULE=on CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w" \
             -o ../../bin/otel-exporter_${GOOS}_${GOARCH} \
             -tags "" .
-      
-      - name: Get version and image info
-        id: get_info
+
+      - name: Derive version and image tags
+        id: meta
         run: |
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,' | sed -e 's/^v//')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "owner=$OWNER" >> $GITHUB_OUTPUT
-          
-          if [[ ! "$VERSION" == *-test ]]; then
-            echo "set_latest=true" >> $GITHUB_OUTPUT
+          RAW_TAG="${GITHUB_REF_NAME}"
+          VERSION="${RAW_TAG#v}"
+          TAG="${VERSION}"
+          if [[ "$RAW_TAG" == *-test* ]]; then
+            RELEASE_TYPE="testing"
+            REGISTRY_NAMESPACE="test"
           else
-            echo "set_latest=false" >> $GITHUB_OUTPUT
+            RELEASE_TYPE="production"
+            REGISTRY_NAMESPACE="prod"
           fi
-      
+
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          GHCR_IMAGE="${GHCR_REGISTRY}/${OWNER}/otel-exporter"
+          PRIVATE_IMAGE="${ASAMA_REGISTRY}/${REGISTRY_NAMESPACE}/otel-exporter"
+
+          {
+            echo "tags<<EOF"
+            echo "${GHCR_IMAGE}:${TAG}"
+            if [ "$RELEASE_TYPE" = "production" ]; then
+              echo "${GHCR_IMAGE}:latest"
+              echo "${PRIVATE_IMAGE}:latest"
+            fi
+            echo "${PRIVATE_IMAGE}:${TAG}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "RELEASE_TYPE=${RELEASE_TYPE}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "GHCR_IMAGE=${GHCR_IMAGE}" >> "$GITHUB_ENV"
+          echo "PRIVATE_IMAGE=${PRIVATE_IMAGE}" >> "$GITHUB_ENV"
+
+          echo "GHCR image:     ${GHCR_IMAGE}:${TAG}"
+          echo "Registry image: ${PRIVATE_IMAGE}:${TAG}"
+          echo "Release Type:   ${RELEASE_TYPE}"
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
+      - name: Log in to container registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.ASAMA_REGISTRY }}
+          username: ${{ secrets.ASAMA_REGISTRY_USER }}
+          password: ${{ secrets.ASAMA_REGISTRY_PASSWORD }}
+
       - name: Prepare Docker context
         run: cp ./bin/otel-exporter_${GOOS}_${GOARCH} ./cmd/otel-exporter/otel-exporter
-      
+
       - name: Build and push
-        uses: docker/build-push-action@v5
+        id: build
+        uses: docker/build-push-action@v7
         with:
           context: ./cmd/otel-exporter
+          file: ./cmd/otel-exporter/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.get_info.outputs.set_latest == 'true' && format('ghcr.io/{0}/otel-exporter:{1},ghcr.io/{0}/otel-exporter:latest', steps.get_info.outputs.owner, steps.get_info.outputs.version) || format('ghcr.io/{0}/otel-exporter:{1}', steps.get_info.outputs.owner, steps.get_info.outputs.version) }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=otel-exporter
+          cache-to: type=gha,mode=max,scope=otel-exporter
+
       - name: Cleanup
         run: rm ./cmd/otel-exporter/otel-exporter
+
+      - name: Publish release summary
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          echo "### Release: otel-exporter" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Attribute | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Image** | \`otel-exporter\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Tag** | \`${TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Release Type** | \`${RELEASE_TYPE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **GHCR** | \`${GHCR_IMAGE}@${DIGEST}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Registry** | \`${PRIVATE_IMAGE}@${DIGEST}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Git Commit** | \`${GITHUB_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"

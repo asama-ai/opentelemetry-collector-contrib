@@ -4,12 +4,12 @@ name: Publish asama-otel-collector
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*-asama-*"
-      - "v[0-9]*.[0-9]*.[0-9]*-asama.*"
+      - "v[0-9]*.[0-9]*.[0-9]*"
+      - "v[0-9]*.[0-9]*.[0-9]*-test[0-9]*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Without v: 0.141.0-asama-test-001 (testing Pulp) or 0.141.0-asama-001 (production Pulp)"
+        description: "Without v: 1.2.3 (production) or 1.2.3-test1 (testing)"
         required: true
 
 permissions:
@@ -34,43 +34,51 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            raw="$INPUT_VERSION"
-            tag="v${raw}"
+            tag="v${INPUT_VERSION}"
           else
             tag="${GITHUB_REF_NAME}"
-            raw="${tag#v}"
           fi
-          # Match -asama-test- before -asama- so "test" is a channel, not a build number.
-          if [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama-test[-.]([0-9]+)$ ]]; then
-            upstream="${BASH_REMATCH[1]}"
-            asama_n="${BASH_REMATCH[2]}"
-            channel=test
-          elif [[ "$raw" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-asama[-.]([0-9]+)$ ]]; then
-            upstream="${BASH_REMATCH[1]}"
-            asama_n="${BASH_REMATCH[2]}"
-            channel=prod
-          else
-            echo "ERROR: version '$raw' must be X.Y.Z-asama-test-N (testing) or X.Y.Z-asama-N (production)"
-            echo "example git tags: v0.141.0-asama-test-001  v0.141.0-asama-001"
+          upstream=$(awk '
+            $1 == "contrib-base:" { in_base = 1; next }
+            in_base && $1 == "version:" { print $2; exit }
+          ' versions.yaml)
+          upstream="${upstream#v}"
+          if [[ ! "$upstream" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: versions.yaml contrib-base version '$upstream' is not X.Y.Z"
             exit 1
           fi
-          # Debian: one hyphen (upstream - revision). RPM Version cannot contain '-'.
-          if [ "$channel" = test ]; then
-            rev="asama.test.${asama_n}"
-            # Testing secrets only. Do not fall back to PULP_*_REPO_NAME (that sent test tags to production).
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}" >> "$GITHUB_ENV"
-            echo "Pulp channel=test deb=${{ secrets.PULP_DEB_TESTING_REPO || 'asama-debian-testing' }} rpm=${{ secrets.PULP_RPM_TESTING_REPO || 'asama-rpm-testing' }}"
+          # Tag is the Asama version. Upstream stays versions.yaml unless that file changes.
+          # vX.Y.Z-testN is matched before vX.Y.Z-test.
+          if [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-test([0-9]+)$ ]]; then
+            asama="${BASH_REMATCH[1]}"
+            rev="${asama}~test${BASH_REMATCH[2]}"
+            echo "DEB_COMPONENT=test" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=rpm-test" >> "$GITHUB_ENV"
+          elif [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-test$ ]]; then
+            asama="${BASH_REMATCH[1]}"
+            rev="${asama}~test"
+            echo "DEB_COMPONENT=test" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=rpm-test" >> "$GITHUB_ENV"
+          elif [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            asama="${BASH_REMATCH[1]}"
+            rev="${asama}"
+            echo "DEB_COMPONENT=main" >> "$GITHUB_ENV"
+            echo "RPM_REPOSITORY=rpm" >> "$GITHUB_ENV"
           else
-            rev="asama.${asama_n}"
-            echo "DEB_REPOSITORY=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }}" >> "$GITHUB_ENV"
-            echo "RPM_REPOSITORY=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}" >> "$GITHUB_ENV"
-            echo "Pulp channel=prod deb=${{ secrets.PULP_DEB_PRODUCTION_REPO || 'asama-debian-production' }} rpm=${{ secrets.PULP_RPM_PRODUCTION_REPO || 'asama-rpm-production' }}"
+            echo "ERROR: tag '$tag' must be vX.Y.Z, vX.Y.Z-test, or vX.Y.Z-testN"
+            echo "examples: v1.2.3  v0.141.0-test  v1.2.3-test1"
+            exit 1
           fi
+          # Debian: upstream - revision. '~testN' sorts older than the production revision.
+          # RPM Version cannot contain '-'.
+          echo "upstream=${upstream} asama=${asama} version=${upstream}-${rev}"
+          echo "DEB_REPOSITORY=deb" >> "$GITHUB_ENV"
+          echo "DEB_SUITE=generic" >> "$GITHUB_ENV"
           echo "DEB_VERSION=${upstream}-${rev}" >> "$GITHUB_ENV"
           echo "RPM_VERSION=${upstream}" >> "$GITHUB_ENV"
           echo "RPM_RELEASE=${rev}" >> "$GITHUB_ENV"
-          echo "PKG_STEM=${upstream}-${rev}" >> "$GITHUB_ENV"
+          echo "DEB_PKG=deb/asama-otel-collector_${upstream}-${rev}_amd64.deb" >> "$GITHUB_ENV"
+          echo "RPM_PKG=/home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector_${upstream}-${rev}.x86_64.rpm" >> "$GITHUB_ENV"
 
       - uses: actions/setup-go@v5
         with:
@@ -81,7 +89,7 @@ jobs:
         run: |
           sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources
           sudo apt-get update
-          sudo apt-get install -y rpm gnupg python3-pip binutils
+          sudo apt-get install -y rpm gnupg binutils jq
 
       - name: create build directory
         run: mkdir -p build/bin
@@ -101,16 +109,18 @@ jobs:
       - name: Prepare otel-collector DEB package
         run: |
           set -euo pipefail
-          DEB_DIR="deb/asama-otel-collector_${DEB_VERSION}-1_amd64"
+          DEB_DIR="${DEB_PKG%.deb}"
           asama-packaging/deb/make-deb.sh "$DEB_DIR"
           mkdir -p "$DEB_DIR/DEBIAN"
           cp asama-packaging/deb/postinst "$DEB_DIR/DEBIAN/postinst"
           cp asama-packaging/deb/prerm "$DEB_DIR/DEBIAN/prerm"
           chmod 0755 "$DEB_DIR/DEBIAN/postinst" "$DEB_DIR/DEBIAN/prerm"
-          sed "s/_VERSION_/${DEB_VERSION}-1/" asama-packaging/deb/control > "$DEB_DIR/DEBIAN/control"
+          sed "s/_VERSION_/${DEB_VERSION}/" asama-packaging/deb/control > "$DEB_DIR/DEBIAN/control"
 
       - name: Build otel-collector DEB
-        run: dpkg-deb --build "deb/asama-otel-collector_${DEB_VERSION}-1_amd64"
+        run: |
+          dpkg-deb --build "${DEB_PKG%.deb}"
+          dpkg-deb -I "$DEB_PKG"
 
       - name: Prepare and build otel RPM
         run: |
@@ -119,10 +129,10 @@ jobs:
           cp build/bin/otelcontribcol-otel-collector ~/rpmbuild/SOURCES/
           cp asama-packaging/config/otel-collector-config.yaml ~/rpmbuild/SOURCES/
           cp asama-packaging/systemd/asama-otel-collector.service ~/rpmbuild/SOURCES/
-          sed -e "s/_RPM_VERSION_/${RPM_VERSION}/" -e "s/_RPM_RELEASE_/${RPM_RELEASE}/" \
+          sed -e "s/_RPM_VERSION_/${RPM_VERSION}/" -e "s|_RPM_RELEASE_%{?dist}|${RPM_RELEASE}|" \
             asama-packaging/rpm/asama-otel-collector.spec > ~/rpmbuild/SPECS/asama-otel-collector.spec
           (cd ~/rpmbuild/SPECS && rpmbuild -ba asama-otel-collector.spec)
-          rpm -qlp ~/rpmbuild/RPMS/x86_64/asama-otel-collector-${RPM_VERSION}-${RPM_RELEASE}*.x86_64.rpm
+          rpm -qlp "$RPM_PKG"
 
       - name: Configure RPM signing
         env:
@@ -134,51 +144,31 @@ jobs:
             exit 0
           fi
           asama-packaging/scripts/configure-rpm-signing.sh
-          find ~/rpmbuild/RPMS -name '*.rpm' -print0 | xargs -0 -r -n1 rpmsign --addsign
-          find ~/rpmbuild/RPMS -name '*.rpm' -print0 | xargs -0 -r -n1 sudo rpm --checksig
+          rpmsign --addsign "$RPM_PKG"
+          sudo rpm --checksig "$RPM_PKG"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: asama-otel-collector-packages
           path: |
-            deb/asama-otel-collector_${{ env.DEB_VERSION }}-1_amd64.deb
-            /home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector-${{ env.RPM_VERSION }}-${{ env.RPM_RELEASE }}*.x86_64.rpm
+            ${{ env.DEB_PKG }}
+            ${{ env.RPM_PKG }}
 
-      - name: Install and configure Pulp CLI
+      - name: Upload packages to existing repositories
         env:
-          PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
-          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
-          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
+          ASAMA_REPO_USERNAME: ${{ secrets.ASAMA_REPO_USERNAME }}
+          ASAMA_REPO_PASSWORD: ${{ secrets.ASAMA_REPO_PASSWORD }}
         run: |
-          if [ -z "${PULP_BASE_URL:-}" ] || [ -z "${PULP_USERNAME:-}" ] || [ -z "${PULP_PASSWORD:-}" ]; then
-            echo "Pulp credentials incomplete; skip Pulp"
-            exit 0
-          fi
-          # RPM CLI lives in pulp-cli; pulp-cli-rpm is not published on PyPI.
-          python3 -m pip install --user pulp-cli==0.40.6 pulp-cli-deb tomli-w
-          asama-packaging/scripts/configure-pulp-cli.sh
-
-      - name: Upload and publish packages in Pulp
-        env:
-          PULP_DEB_SIGNING_SERVICE: ${{ secrets.PULP_DEB_SIGNING_SERVICE || 'asama-deb-signer' }}
-          PULP_BASE_URL: ${{ secrets.PULP_BASE_URL }}
-          PULP_USERNAME: ${{ secrets.PULP_USERNAME }}
-          PULP_PASSWORD: ${{ secrets.PULP_PASSWORD }}
-        run: |
-          if [ -z "${PULP_BASE_URL:-}" ] || [ -z "${PULP_USERNAME:-}" ] || [ -z "${PULP_PASSWORD:-}" ]; then
-            echo "Pulp credentials incomplete; skip Pulp upload"
-            exit 0
-          fi
-          asama-packaging/scripts/pulp-asama.sh deb content upload --repository "$DEB_REPOSITORY" --file "deb/asama-otel-collector_${DEB_VERSION}-1_amd64.deb"
-          asama-packaging/scripts/pulp-asama.sh deb publication create --repository "$DEB_REPOSITORY" --signing-service "$PULP_DEB_SIGNING_SERVICE"
-          find ~/rpmbuild/RPMS -name 'asama-otel-collector-*.rpm' -print0 | xargs -0 -r -n1 -I{} asama-packaging/scripts/pulp-asama.sh rpm content upload --repository "$RPM_REPOSITORY" --file '{}'
-          asama-packaging/scripts/pulp-asama.sh rpm publication create --repository "$RPM_REPOSITORY"
+          set -euo pipefail
+          # deb, rpm, and rpm-test already exist. Upload, then publish.
+          asama-packaging/scripts/repo-upload.sh deb "$DEB_REPOSITORY" "$DEB_PKG" "$DEB_SUITE" "$DEB_COMPONENT"
+          asama-packaging/scripts/repo-upload.sh rpm "$RPM_REPOSITORY" "$RPM_PKG"
 
       - name: Attach artifacts to the GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            deb/asama-otel-collector_${{ env.DEB_VERSION }}-1_amd64.deb
-            /home/runner/rpmbuild/RPMS/x86_64/asama-otel-collector-${{ env.RPM_VERSION }}-${{ env.RPM_RELEASE }}*.x86_64.rpm
+            ${{ env.DEB_PKG }}
+            ${{ env.RPM_PKG }}
