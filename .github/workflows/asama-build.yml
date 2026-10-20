@@ -34,7 +34,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: oldstable
           cache-dependency-path: "**/*.sum"
@@ -155,7 +155,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: oldstable
           cache-dependency-path: "**/*.sum"
