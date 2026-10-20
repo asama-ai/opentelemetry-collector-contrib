@@ -4,12 +4,11 @@ name: Publish asama-otel-collector
 on:
   push:
     tags:
-      - "v[0-9]*.[0-9]*.[0-9]*"
-      - "v[0-9]*.[0-9]*.[0-9]*-test[0-9]*"
+      - "host-v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Without v: 1.2.3 (production) or 1.2.3-test1 (testing)"
+        description: "Without host-v: 1.2.3 (production) or 1.2.3-test1 (testing)"
         required: true
 
 permissions:
@@ -34,10 +33,11 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            tag="v${INPUT_VERSION}"
+            tag="host-v${INPUT_VERSION}"
           else
             tag="${GITHUB_REF_NAME}"
           fi
+          tag="${tag#host-}"
           upstream=$(awk '
             $1 == "contrib-base:" { in_base = 1; next }
             in_base && $1 == "version:" { print $2; exit }
@@ -65,8 +65,8 @@ jobs:
             echo "DEB_COMPONENT=main" >> "$GITHUB_ENV"
             echo "RPM_REPOSITORY=rpm" >> "$GITHUB_ENV"
           else
-            echo "ERROR: tag '$tag' must be vX.Y.Z, vX.Y.Z-test, or vX.Y.Z-testN"
-            echo "examples: v1.2.3  v0.141.0-test  v1.2.3-test1"
+            echo "ERROR: tag 'host-${tag}' must be host-vX.Y.Z, host-vX.Y.Z-test, or host-vX.Y.Z-testN"
+            echo "examples: host-v1.2.3  host-v1.2.3-test  host-v1.2.3-test1"
             exit 1
           fi
           # Debian: upstream - revision. '~testN' sorts older than the production revision.
