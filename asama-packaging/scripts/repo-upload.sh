@@ -22,7 +22,8 @@ if [[ "$kind" == "deb" && ( -z "$distribution" || -z "$component" ) ]]; then
 fi
 
 api="https://console.asama.cloud/pulp-publish/api/v3"
-auth=(curl -sS --fail-with-body --connect-timeout 15 --user "${ASAMA_REPO_USERNAME}:${ASAMA_REPO_PASSWORD}")
+# --max-time 60 covers lookup and publication calls. The package upload overrides it.
+auth=(curl -sS --fail-with-body --connect-timeout 15 --max-time 60 --user "${ASAMA_REPO_USERNAME}:${ASAMA_REPO_PASSWORD}")
 deb_signing_service="asama-deb-signer"
 
 wait_task() {
@@ -64,7 +65,7 @@ form=(-F "file=@${file}" -F "repository=${repo_href}")
 if [[ "$kind" == "deb" ]]; then
   form+=(-F "distribution=${distribution}" -F "component=${component}")
 fi
-task_href=$("${auth[@]}" "${form[@]}" "$upload_url" | jq -er '.task')
+task_href=$("${auth[@]}" --max-time 300 "${form[@]}" "$upload_url" | jq -er '.task')
 wait_task "$task_href"
 echo "uploaded ${file} to ${repository}"
 
