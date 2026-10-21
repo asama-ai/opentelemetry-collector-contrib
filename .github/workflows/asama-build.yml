@@ -1,154 +1,218 @@
+# Build and push one image per tag.
+# collector-v1.2.3 / collector-v1.2.3-test1, exporter-v1.2.3 / exporter-v1.2.3-test1.
+# GHCR: ghcr.io/<owner>/otel-collector and ghcr.io/<owner>/otel-exporter
+# Private registry: console.asama.cloud/prod/<image> for production,
+# console.asama.cloud/test/<image> when the tag contains -test.
+
 name: build-custom-docker-images
 
 on:
   push:
     tags:
-      - 'v*'   # Trigger on version tags
-      - 'v*-test'  # Also trigger on test version tags
+      - "collector-v*"
+      - "exporter-v*"
   workflow_dispatch:
+    inputs:
+      component:
+        description: Image to build
+        required: true
+        type: choice
+        options:
+          - collector
+          - exporter
+      version:
+        description: "Without prefix: 1.2.3 or 1.2.3-test1"
+        required: true
 
 permissions:
   contents: read
-  packages: write
 
 env:
   GOARCH: amd64
   GOOS: linux
+  GHCR_REGISTRY: ghcr.io
+  ASAMA_REGISTRY: console.asama.cloud
 
 jobs:
-  build-collector:
-    # Host-agent collector debs use vX.Y.Z-asama-* tags; skip GHCR image jobs for those.
-    if: ${{ github.event_name != 'push' || !contains(github.ref_name, '-asama') }}
-    timeout-minutes: 30
+  select:
     runs-on: ubuntu-24.04
+    outputs:
+      include: ${{ steps.set.outputs.include }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: oldstable
-          cache-dependency-path: "**/*.sum"
-      
-      - name: Install dependencies
-        run: make -j2 gomoddownload
-      
-      - name: Install Tools
-        run: make install-tools
-      
-      - name: Generate collector code
-        run: ./.tools/builder --skip-compilation --config cmd/otel-collector/builder-config.yaml
-      
-      - name: Build binary
+      - name: Choose the image for this tag
+        id: set
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          COMPONENT: ${{ inputs.component }}
         run: |
-          cd ./cmd/otel-collector && \
-          GO111MODULE=on CGO_ENABLED=0 go build -trimpath \
-            -o ../../bin/otel-collector_${GOOS}_${GOARCH} \
-            -tags "" .
-      
-      - name: Get version and image info
-        id: get_info
-        run: |
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,' | sed -e 's/^v//')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "owner=$OWNER" >> $GITHUB_OUTPUT
-          
-          if [[ ! "$VERSION" == *-test ]]; then
-            echo "set_latest=true" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            selected="$COMPONENT"
+          elif [[ "$REF_NAME" == collector-v* ]]; then
+            selected=collector
+          elif [[ "$REF_NAME" == exporter-v* ]]; then
+            selected=exporter
           else
-            echo "set_latest=false" >> $GITHUB_OUTPUT
+            echo "ERROR: tag '$REF_NAME' is not collector-v* or exporter-v*"
+            exit 1
           fi
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Prepare Docker context
-        run: cp ./bin/otel-collector_${GOOS}_${GOARCH} ./cmd/otel-collector/otel-collector
-      
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./cmd/otel-collector
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.get_info.outputs.set_latest == 'true' && format('ghcr.io/{0}/otel-collector:{1},ghcr.io/{0}/otel-collector:latest', steps.get_info.outputs.owner, steps.get_info.outputs.version) || format('ghcr.io/{0}/otel-collector:{1}', steps.get_info.outputs.owner, steps.get_info.outputs.version) }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Cleanup
-        run: rm ./cmd/otel-collector/otel-collector
+          case "$selected" in
+            collector) image_name=otel-collector ;;
+            exporter) image_name=otel-exporter ;;
+            *)
+              echo "ERROR: unknown component '$selected'"
+              exit 1
+              ;;
+          esac
+          echo "include=[{\"component\":\"${selected}\",\"image_name\":\"${image_name}\"}]" >> "$GITHUB_OUTPUT"
 
-  build-exporter:
-    if: ${{ github.event_name != 'push' || !contains(github.ref_name, '-asama') }}
-    timeout-minutes: 30
+  build:
+    name: Build & Publish ${{ matrix.image_name }}
+    needs: select
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.include) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v6
         with:
           go-version: oldstable
           cache-dependency-path: "**/*.sum"
-      
+
       - name: Install dependencies
         run: make -j2 gomoddownload
-      
+
       - name: Install Tools
         run: make install-tools
-      
+
       - name: Generate collector code
-        run: ./.tools/builder --skip-compilation --config cmd/otel-exporter/builder-config.yaml
-      
+        run: ./.tools/builder --skip-compilation --config cmd/${{ matrix.image_name }}/builder-config.yaml
+
       - name: Build binary
         run: |
-          cd ./cmd/otel-exporter && \
+          cd ./cmd/${{ matrix.image_name }} && \
           GO111MODULE=on CGO_ENABLED=0 go build -trimpath \
-            -o ../../bin/otel-exporter_${GOOS}_${GOARCH} \
+            -ldflags "-s -w" \
+            -o ../../bin/${{ matrix.image_name }}_${GOOS}_${GOARCH} \
             -tags "" .
-      
-      - name: Get version and image info
-        id: get_info
+
+      - name: Derive version and image tags
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          COMPONENT: ${{ matrix.component }}
+          IMAGE_NAME: ${{ matrix.image_name }}
         run: |
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,' | sed -e 's/^v//')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "owner=$OWNER" >> $GITHUB_OUTPUT
-          
-          if [[ ! "$VERSION" == *-test ]]; then
-            echo "set_latest=true" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RAW_TAG="${COMPONENT}-v${INPUT_VERSION}"
           else
-            echo "set_latest=false" >> $GITHUB_OUTPUT
+            RAW_TAG="${GITHUB_REF_NAME}"
           fi
-      
+          if [[ ! "$RAW_TAG" =~ ^${COMPONENT}-v([0-9]+\.[0-9]+\.[0-9]+(-test[0-9]*)?)$ ]]; then
+            echo "ERROR: tag '$RAW_TAG' must be ${COMPONENT}-vX.Y.Z or ${COMPONENT}-vX.Y.Z-testN"
+            exit 1
+          fi
+          asama="${BASH_REMATCH[1]}"
+          upstream=$(awk '
+            $1 == "contrib-base:" { in_base = 1; next }
+            in_base && $1 == "version:" { print $2; exit }
+          ' versions.yaml)
+          upstream="${upstream#v}"
+          if [[ ! "$upstream" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: versions.yaml contrib-base version '$upstream' is not X.Y.Z"
+            exit 1
+          fi
+          # Docker tags cannot contain '~'. Packages use 1.2.3~test1; images use 1.2.3-test1.
+          if [[ "$asama" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-test([0-9]*)$ ]]; then
+            TAG="${upstream}-${BASH_REMATCH[1]}-test${BASH_REMATCH[2]}"
+            RELEASE_TYPE="testing"
+            REGISTRY_NAMESPACE="test"
+          else
+            TAG="${upstream}-${asama}"
+            RELEASE_TYPE="production"
+            REGISTRY_NAMESPACE="prod"
+          fi
+
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          GHCR_IMAGE="${GHCR_REGISTRY}/${OWNER}/${IMAGE_NAME}"
+          PRIVATE_IMAGE="${ASAMA_REGISTRY}/${REGISTRY_NAMESPACE}/${IMAGE_NAME}"
+
+          {
+            echo "tags<<EOF"
+            echo "${GHCR_IMAGE}:${TAG}"
+            if [ "$RELEASE_TYPE" = "production" ]; then
+              echo "${GHCR_IMAGE}:latest"
+              echo "${PRIVATE_IMAGE}:latest"
+            fi
+            echo "${PRIVATE_IMAGE}:${TAG}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "RELEASE_TYPE=${RELEASE_TYPE}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "GHCR_IMAGE=${GHCR_IMAGE}" >> "$GITHUB_ENV"
+          echo "PRIVATE_IMAGE=${PRIVATE_IMAGE}" >> "$GITHUB_ENV"
+
+          echo "GHCR image:     ${GHCR_IMAGE}:${TAG}"
+          echo "Registry image: ${PRIVATE_IMAGE}:${TAG}"
+          echo "Release Type:   ${RELEASE_TYPE}"
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Prepare Docker context
-        run: cp ./bin/otel-exporter_${GOOS}_${GOARCH} ./cmd/otel-exporter/otel-exporter
-      
-      - name: Build and push
-        uses: docker/build-push-action@v5
+
+      - name: Log in to container registry
+        uses: docker/login-action@v4
         with:
-          context: ./cmd/otel-exporter
+          registry: ${{ env.ASAMA_REGISTRY }}
+          username: ${{ secrets.ASAMA_REGISTRY_USER }}
+          password: ${{ secrets.ASAMA_REGISTRY_PASSWORD }}
+
+      - name: Prepare Docker context
+        run: cp ./bin/${{ matrix.image_name }}_${GOOS}_${GOARCH} ./cmd/${{ matrix.image_name }}/${{ matrix.image_name }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./cmd/${{ matrix.image_name }}
+          file: ./cmd/${{ matrix.image_name }}/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.get_info.outputs.set_latest == 'true' && format('ghcr.io/{0}/otel-exporter:{1},ghcr.io/{0}/otel-exporter:latest', steps.get_info.outputs.owner, steps.get_info.outputs.version) || format('ghcr.io/{0}/otel-exporter:{1}', steps.get_info.outputs.owner, steps.get_info.outputs.version) }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.image_name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image_name }}
+
       - name: Cleanup
-        run: rm ./cmd/otel-exporter/otel-exporter
+        run: rm ./cmd/${{ matrix.image_name }}/${{ matrix.image_name }}
+
+      - name: Publish release summary
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          echo "### Release: ${{ matrix.image_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Attribute | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Image** | \`${{ matrix.image_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Tag** | \`${TAG}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Release Type** | \`${RELEASE_TYPE}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **GHCR** | \`${GHCR_IMAGE}@${DIGEST}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Registry** | \`${PRIVATE_IMAGE}@${DIGEST}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Git Commit** | \`${GITHUB_SHA}\` |" >> "$GITHUB_STEP_SUMMARY"
